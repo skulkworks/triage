@@ -44,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard !store.pending.isEmpty else { return .terminateNow }
+        guard !store.pending.isEmpty || store.committing > 0 else { return .terminateNow }
         Task {
             await store.flushPending()
             sender.reply(toApplicationShouldTerminate: true)

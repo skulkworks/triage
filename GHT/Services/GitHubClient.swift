@@ -19,7 +19,8 @@ nonisolated enum GitHubError: LocalizedError, Sendable {
 /// The result of a conditional notifications poll.
 nonisolated enum NotificationsPoll: Sendable {
     case notModified(pollInterval: Int)
-    case updated([GHNotification], lastModified: String?, pollInterval: Int)
+    /// `complete` is false when the page cap stopped pagination early.
+    case updated([GHNotification], lastModified: String?, pollInterval: Int, complete: Bool)
 }
 
 nonisolated struct RateLimit: Sendable {
@@ -79,8 +80,9 @@ nonisolated final class GitHubClient: Sendable {
     // MARK: Notifications
 
     /// The whole inbox (read and unread, not done). `ifModifiedSince` makes an unchanged poll free.
-    func notifications(ifModifiedSince: String?, maxPages: Int = 10) async throws -> NotificationsPoll {
-        var url: URL? = URL(string: "https://api.github.com/notifications?all=true&per_page=50")
+    /// Without `is_done=false`, `all=true` also returns threads already marked done.
+    func notifications(ifModifiedSince: String?, maxPages: Int = 40) async throws -> NotificationsPoll {
+        var url: URL? = URL(string: "https://api.github.com/notifications?all=true&is_done=false&per_page=50")
         var all: [GHNotification] = []
         var lastModified: String?
         var interval = 60
@@ -105,7 +107,7 @@ nonisolated final class GitHubClient: Sendable {
             url = Self.nextLink(http.value(forHTTPHeaderField: "Link"))
             page += 1
         }
-        return .updated(all, lastModified: lastModified, pollInterval: interval)
+        return .updated(all, lastModified: lastModified, pollInterval: interval, complete: url == nil)
     }
 
     static func nextLink(_ header: String?) -> URL? {

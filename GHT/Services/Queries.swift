@@ -103,7 +103,7 @@ nonisolated enum Queries {
           category { name emojiHTML }
           answer { id }
           labels(first: 30) { nodes { id name color } }
-          viewerSubscription viewerCanReact
+          viewerSubscription viewerCanReact viewerCanUpdate viewerCanClose viewerCanReopen
           \(reactions)
           comments(last: 50) {
             totalCount

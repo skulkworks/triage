@@ -38,8 +38,11 @@ struct Composer: View {
             HStack(spacing: 8) {
                 snippets
                 Spacer()
-                if subject.__typename == "PullRequest", subject.state == "OPEN" { reviewMenu }
-                if canChangeState { stateButton }
+                Group {
+                    if subject.__typename == "PullRequest", subject.state == "OPEN" { reviewMenu }
+                    if canChangeState { stateButton }
+                }
+                .disabled(sending)
                 Button {
                     send(nil)
                 } label: {

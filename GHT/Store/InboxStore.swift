@@ -142,6 +142,12 @@ final class InboxStore {
 
     private(set) var client: GitHubClient?
     private var infoRevision: [String: String] = [:]
+    /// The notification revision each cached detail was loaded at.
+    private var detailRevision: [String: String] = [:]
+    /// Bumped on sign-in and sign-out, so replies to requests made for another account are dropped.
+    private var session = 0
+    /// Done/unsubscribe requests on the wire right now (quit waits for them).
+    private(set) var committing = 0
     private var lastModified: String?
     private var pollInterval = 60
     private var pollTask: Task<Void, Never>?
@@ -170,6 +176,7 @@ final class InboxStore {
             let v = try await client.graphQL(Queries.viewer, as: V.self)
             viewer = Viewer(id: v.viewer.id, login: v.viewer.login, avatarUrl: v.viewer.avatarUrl)
             self.client = client
+            session += 1
             tokenSource = resolved.source
             auth = .signedIn
             startPolling()
@@ -181,6 +188,18 @@ final class InboxStore {
 
     func signOut() {
         pollTask?.cancel()
+        session += 1
+        // Anything still waiting out its undo window belongs to this account: drop it, don't send it later.
+        for task in pendingTasks.values { task.cancel() }
+        pendingTasks = [:]
+        pending = []
+        hidden = []
+        toast = nil
+        focused = nil
+        selection = []
+        drafts = [:]
+        readMarkers = [:]
+        detailRevision = [:]
         TokenProvider.delete()
         client = nil
         viewer = nil
@@ -212,34 +231,45 @@ final class InboxStore {
         isRefreshing = true
         defer { isRefreshing = false }
         now = Date()
+        let session = self.session
         do {
             let result = try await client.notifications(ifModifiedSince: force ? nil : lastModified)
+            guard session == self.session else { return }
             switch result {
             case .notModified(let interval):
                 pollInterval = interval
-            case .updated(let list, let lastModified, let interval):
+            case .updated(let list, let lastModified, let interval, let complete):
                 pollInterval = interval
                 self.lastModified = lastModified
-                apply(list)
+                apply(list, complete: complete)
                 await enrich()
             }
+            guard session == self.session else { return }
             lastRefreshed = Date()
             lastError = nil
         } catch {
+            guard session == self.session else { return }
             lastError = error.localizedDescription
         }
     }
 
-    private func apply(_ list: [GHNotification]) {
+    private func apply(_ list: [GHNotification], complete: Bool) {
         let ids = Set(list.map(\.id))
         let fresh = list.sorted { $0.updatedAt > $1.updatedAt }
-        // A detail cached for an older revision is stale.
-        for n in fresh where infoRevision[n.id] != n.revisionKey { details[n.id] = nil }
         notifications = fresh
         selection = selection.intersection(ids)
+        // A detail cached for an older revision is stale; the open one reloads in place.
+        for n in fresh where details[n.id] != nil && detailRevision[n.id] != n.revisionKey {
+            if n.id == focused {
+                Task { await loadDetail(n.id, force: true) }
+            } else {
+                details[n.id] = nil
+            }
+        }
         // Snoozes for threads that left the inbox, or woke up on new activity, are finished.
+        // A capped (incomplete) list can't tell us a thread left, so only wake-ups count then.
         let stale = local.snoozed.filter { id, s in
-            guard let n = fresh.first(where: { $0.id == id }) else { return true }
+            guard let n = fresh.first(where: { $0.id == id }) else { return complete }
             return n.updatedAt > s.updatedAt
         }
         if !stale.isEmpty { for id in stale.keys { local.snoozed[id] = nil } }
@@ -249,6 +279,7 @@ final class InboxStore {
     /// Fetches state, author and labels for every issue, PR and discussion that changed, in one request per 40.
     private func enrich() async {
         guard let client else { return }
+        let session = self.session
         let todo = notifications.filter { n in
             n.number != nil && infoRevision[n.id] != n.revisionKey && (n.kind == .issue || n.kind == .pullRequest || n.kind == .discussion)
         }
@@ -260,6 +291,7 @@ final class InboxStore {
             }
             do {
                 let data = try await client.graphQL(Queries.batch(items), as: [String: AliasRepo?].self, allowPartial: true)
+                guard session == self.session else { return }
                 for (i, n) in chunk.enumerated() {
                     guard let repo = data["t\(i)"] ?? nil, let s = repo.issueOrPullRequest ?? repo.discussion else { continue }
                     info[n.id] = SubjectInfo(s)
@@ -321,7 +353,10 @@ final class InboxStore {
 
     var visible: [GHNotification] {
         let q = activeQuery
-        return notifications.filter { inScope($0, scope) && (q.isEmpty || q.matches(facts($0))) }
+        // The open thread stays put even if it stops matching (Unread, once it's read), so j/k and Done keep their place.
+        return notifications.filter { n in
+            (n.id == focused && !hidden.contains(n.id)) || (inScope(n, scope) && (q.isEmpty || q.matches(facts(n))))
+        }
     }
 
     func count(_ scope: Scope) -> Int { notifications.count { inScope($0, scope) } }
@@ -485,7 +520,6 @@ final class InboxStore {
         let title = kind == .done ? "Marked \(noun) as done" : "Unsubscribed from \(noun)"
         let action = PendingAction(kind: kind, threadIDs: ids, title: title)
         pending.append(action)
-        toast = Toast(message: title, undoable: action.id)
         let delay = prefs.undoSeconds
         pendingTasks[action.id] = Task { [weak self] in
             try? await Task.sleep(for: .seconds(delay))
@@ -501,14 +535,14 @@ final class InboxStore {
         pending.removeAll { $0.id == action.id }
         hidden.subtract(action.threadIDs)
         if action.threadIDs.count == 1 { open(action.threadIDs[0]) }
-        toast = nil
     }
 
     private func commit(_ actionID: UUID) async {
         guard let index = pending.firstIndex(where: { $0.id == actionID }), let client else { return }
         let action = pending.remove(at: index)
         pendingTasks[actionID] = nil
-        if toast?.undoable == actionID { toast = nil }
+        committing += 1
+        defer { committing -= 1 }
         var failed: [String] = []
         let unsubscribing = action.kind == .unsubscribe
         await withTaskGroup(of: (String, Bool).self) { group in
@@ -544,6 +578,7 @@ final class InboxStore {
             pendingTasks[action.id]?.cancel()
             await commit(action.id)
         }
+        while committing > 0 { try? await Task.sleep(for: .milliseconds(100)) }
     }
 
     func markRead(_ ids: [String]) {
@@ -563,10 +598,15 @@ final class InboxStore {
     func markAllRead() {
         guard let client else { return }
         let stamp = Date()
+        let wasUnread = Set(notifications.filter(\.unread).map(\.id))
         for i in notifications.indices { notifications[i].unread = false }
         Notifier.shared.removeAll()
         Task {
-            do { try await client.markAllRead(before: stamp) } catch { showError(error) }
+            do { try await client.markAllRead(before: stamp) } catch {
+                for i in notifications.indices where wasUnread.contains(notifications[i].id) { notifications[i].unread = true }
+                lastModified = nil  // the next poll fetches the real state
+                showError(error)
+            }
         }
     }
 
@@ -644,6 +684,7 @@ final class InboxStore {
                 detail = .unsupported
             }
             details[id] = detail
+            detailRevision[id] = n.revisionKey
         } catch {
             detailErrors[id] = error.localizedDescription
         }
@@ -655,8 +696,10 @@ final class InboxStore {
         nonisolated struct R: Decodable, Sendable { nonisolated struct S: Decodable, Sendable { nonisolated struct N: Decodable, Sendable { var number: Int?; var title: String? }; var nodes: [N] }; var search: S }
         let q = "repo:\(n.repository.fullName) in:title \"\(n.subject.title.replacingOccurrences(of: "\"", with: ""))\""
         let r = try await client.graphQL(Queries.findDiscussion, variables: ["q": q], as: R.self)
-        guard let hit = r.search.nodes.first(where: { $0.title == n.subject.title }) ?? r.search.nodes.first, let num = hit.number else {
-            throw GitHubError.graphQL(["Couldn't find this discussion."])
+        // Only an exact, unambiguous title match: a reply must never land on a different discussion.
+        let hits = r.search.nodes.filter { $0.title == n.subject.title && $0.number != nil }
+        guard hits.count == 1, let num = hits[0].number else {
+            throw GitHubError.graphQL(["Couldn't identify this discussion for certain. Open it on GitHub instead."])
         }
         return num
     }
@@ -664,7 +707,7 @@ final class InboxStore {
     // MARK: Conversation actions
 
     private func perform(_ id: String, success: String? = nil, _ work: @escaping (GitHubClient) async throws -> Void) async -> Bool {
-        guard let client else { return false }
+        guard let client, !busy.contains(id) else { return false }
         busy.insert(id)
         defer { busy.remove(id) }
         do {

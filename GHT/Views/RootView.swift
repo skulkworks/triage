@@ -19,7 +19,13 @@ struct RootView: View {
         }
         .frame(minWidth: presentation == .window ? 760 : nil, maxWidth: .infinity,
                minHeight: presentation == .window ? 480 : nil, maxHeight: .infinity)
-        .overlay(alignment: .bottom) { ToastView(store: store).padding(.bottom, 14) }
+        .overlay(alignment: .bottom) {
+            VStack(spacing: 8) {
+                ToastView(store: store)
+                UndoBar(store: store)
+            }
+            .padding(.bottom, 14)
+        }
         .environment(\.presentation, presentation)
         .environment(\.windowActions, actions)
     }
@@ -70,6 +76,30 @@ extension EnvironmentValues {
     var windowActions: WindowActions {
         get { self[WindowActionsKey.self] }
         set { self[WindowActionsKey.self] = newValue }
+    }
+}
+
+/// Stays up for as long as a done/unsubscribe is waiting to be sent, whatever other messages come and go.
+struct UndoBar: View {
+    var store: InboxStore
+
+    var body: some View {
+        if let action = store.pending.last {
+            HStack(spacing: 10) {
+                Image(systemName: "clock.arrow.circlepath").foregroundStyle(.secondary)
+                Text(store.pending.count > 1 ? "\(action.title) (+\(store.pending.count - 1) more)" : action.title)
+                    .font(.callout)
+                Button("Undo") { store.undo(action.id) }
+                    .buttonStyle(.borderless)
+                    .fontWeight(.semibold)
+                    .keyboardShortcut("z", modifiers: .command)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .glassEffect(.regular, in: Capsule())
+            .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
     }
 }
 
