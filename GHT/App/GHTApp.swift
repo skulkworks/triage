@@ -1,0 +1,92 @@
+import AppKit
+import SwiftUI
+
+/// Plain AppKit entry point: the app is a status item with a popover, no SwiftUI scenes to manage.
+@main
+enum GHTMain {
+    static let delegate = AppDelegate()
+
+    static func main() {
+        let app = NSApplication.shared
+        app.delegate = delegate
+        app.setActivationPolicy(.accessory)
+        app.run()
+    }
+}
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    let store = InboxStore()
+    private var status: StatusController?
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        if CommandLine.arguments.contains("-ghtSelfTest") {
+            Task { await SelfTest.run(); NSApp.terminate(nil) }
+            return
+        }
+        installMainMenu()
+        Notifier.shared.setUp()
+        status = StatusController(store: store)
+        Notifier.shared.onOpen = { [weak self] id in self?.status?.show(thread: id.isEmpty ? nil : id) }
+        Notifier.shared.onDone = { [weak self] id in self?.store.markDone([id]) }
+        Notifier.shared.onRead = { [weak self] id in self?.store.markRead([id]) }
+        store.start()
+        // Debug helpers for screenshots: -ghtShowOnLaunch, -ghtWindow, -ghtOpenThread <id>.
+        let args = CommandLine.arguments
+        if args.contains("-ghtWindow") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.status?.showWindow() }
+        } else if args.contains("-ghtShowOnLaunch") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.status?.show(thread: nil) }
+        }
+        if let i = args.firstIndex(of: "-ghtOpenThread"), args.indices.contains(i + 1) {
+            let id = args[i + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) { self.status?.show(thread: id) }
+        }
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard !store.pending.isEmpty else { return .terminateNow }
+        Task {
+            await store.flushPending()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        status?.show(thread: nil)
+        return false
+    }
+
+    /// Menu-bar apps have no visible menu, but text fields still need Edit's key equivalents (⌘C, ⌘V, ⌘Z…).
+    private func installMainMenu() {
+        let main = NSMenu()
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu()
+        appMenu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle: "Quit GitHub Triage", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        main.addItem(appItem)
+
+        let editItem = NSMenuItem()
+        let edit = NSMenu(title: "Edit")
+        edit.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        edit.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        edit.addItem(.separator())
+        edit.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editItem.submenu = edit
+        main.addItem(editItem)
+
+        let windowItem = NSMenuItem()
+        let window = NSMenu(title: "Window")
+        window.addItem(withTitle: "Close", action: #selector(NSWindow.performClose(_:)), keyEquivalent: "w")
+        windowItem.submenu = window
+        main.addItem(windowItem)
+        NSApp.mainMenu = main
+    }
+
+    @objc private func openSettings() { status?.showSettings() }
+}

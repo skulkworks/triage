@@ -1,0 +1,82 @@
+name: GHT
+options:
+  bundleIdPrefix: dev.skulkworks
+  deploymentTarget:
+    macOS: "26.0"
+  xcodeVersion: "27.0"
+  generateEmptyDirectories: true
+  groupSortPosition: top
+
+configs:
+  Debug: debug
+  Release: release
+
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "6.0"
+    SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+    SWIFT_APPROACHABLE_CONCURRENCY: YES
+    MACOSX_DEPLOYMENT_TARGET: "26.0"
+    DEVELOPMENT_TEAM: M5N5FDK55S
+    CODE_SIGN_STYLE: Automatic
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEAD_CODE_STRIPPING: YES
+
+schemes:
+  GHT:
+    build:
+      targets:
+        GHT: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - GHTTests
+    profile:
+      config: Release
+    archive:
+      config: Release
+
+targets:
+  GHT:
+    type: application
+    platform: macOS
+    sources:
+      - path: GHT
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_LSUIElement: YES
+        PRODUCT_MODULE_NAME: GHT
+        INFOPLIST_KEY_CFBundleDisplayName: GitHub Triage
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Trilby Media"
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: GHT/Resources/GHT.entitlements
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: dev.skulkworks.ght.debug
+          PRODUCT_NAME: GitHub Triage Dev
+          INFOPLIST_KEY_CFBundleDisplayName: GitHub Triage Dev
+        Release:
+          PRODUCT_BUNDLE_IDENTIFIER: dev.skulkworks.ght
+          PRODUCT_NAME: GitHub Triage
+
+  GHTTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests
+    dependencies:
+      - target: GHT
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/GitHub Triage Dev.app/Contents/MacOS/GitHub Triage Dev"
