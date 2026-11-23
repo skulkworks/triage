@@ -158,7 +158,10 @@ do_publish() {
     # replaced: different bytes would disagree with cached copies, the appcast signature
     # and the cask checksum. Re-running with the same DMG (after a failure further on) skips it.
     local live; live=$(mktemp)
-    local status; status=$(curl -sL -o "$live" -w '%{http_code}' "https://$UPDATES_HOST/$UPDATES_PREFIX/$name" || echo 000)
+    # The query string keeps this probe out of the URL's own cache entry: Cloudflare
+    # caches a 404 too, which would hide the DMG for minutes after uploading it.
+    local status; status=$(curl -sL -o "$live" -w '%{http_code}' \
+        "https://$UPDATES_HOST/$UPDATES_PREFIX/$name?probe=$(date +%s)" || echo 000)
     if [ "$status" = "200" ]; then
         if [ "$(shasum -a 256 < "$live")" != "$(shasum -a 256 < "$dmg")" ]; then
             rm -f "$live"
