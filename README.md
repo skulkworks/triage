@@ -1,4 +1,4 @@
-# GitHub Triage (ght)
+# Triage
 
 A menu-bar inbox for GitHub notifications on macOS 26+. It does what the github.com inbox does (read, done, save, unsubscribe, filters) and lets you read the whole conversation and act on it without opening a browser: reply, close or reopen with a reason, merge, approve, label, assign yourself, react.
 
@@ -28,7 +28,7 @@ GitHub's API can't mark a thread unread or move a done thread back to the inbox,
 
 ```sh
 xcodegen generate
-xcodebuild -project GHT.xcodeproj -scheme GHT -configuration Debug -derivedDataPath build/DerivedData build
+xcodebuild -project Triage.xcodeproj -scheme Triage -configuration Debug -derivedDataPath build/DerivedData build
 ```
 
-Debug builds are "GitHub Triage Dev" (`dev.skulkworks.ght.debug`) with their own Keychain item and settings. `-ghtSelfTest -ghtOut <dir>` runs read-only checks against the signed-in account and writes rendered conversations to `<dir>`. `-ghtWindow`, `-ghtShowOnLaunch`, `-ghtOpenThread <id>` and `-ghtAppearance light|dark` are for screenshots.
+Debug builds are "Triage Dev" (`dev.skulkworks.triage.debug`) with their own Keychain item and settings. `-triageSelfTest -triageOut <dir>` runs read-only checks against the signed-in account and writes rendered conversations to `<dir>`. `-triageWindow`, `-triageShowOnLaunch`, `-triageOpenThread <id>`, `-triageScope <tab>` and `-triageAppearance light|dark` are for screenshots.

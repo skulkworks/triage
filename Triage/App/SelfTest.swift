@@ -1,12 +1,12 @@
 import Foundation
 
-/// `-ghtSelfTest [-ghtOut <dir>]`: read-only checks against the signed-in account. Lists the inbox, enriches it,
+/// `-triageSelfTest [-triageOut <dir>]`: read-only checks against the signed-in account. Lists the inbox, enriches it,
 /// loads one conversation of each kind and writes the rendered pages to the out dir. Never changes anything on GitHub.
 enum SelfTest {
     static func run() async {
         let args = CommandLine.arguments
-        let out = args.firstIndex(of: "-ghtOut").flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
-            ?? NSTemporaryDirectory() + "ght-selftest"
+        let out = args.firstIndex(of: "-triageOut").flatMap { args.indices.contains($0 + 1) ? args[$0 + 1] : nil }
+            ?? NSTemporaryDirectory() + "triage-selftest"
         try? FileManager.default.createDirectory(atPath: out, withIntermediateDirectories: true)
         func log(_ s: String) { print(s); fflush(stdout) }
 

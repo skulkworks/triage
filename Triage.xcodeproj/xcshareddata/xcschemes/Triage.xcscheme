@@ -15,10 +15,10 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "1E966586B33AE2A6B140ADAB"
-               BuildableName = "GHT.app"
-               BlueprintName = "GHT"
-               ReferencedContainer = "container:GHT.xcodeproj">
+               BlueprintIdentifier = "7C350C05841D66493EA1789A"
+               BuildableName = "Triage.app"
+               BlueprintName = "Triage"
+               ReferencedContainer = "container:Triage.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
       </BuildActionEntries>
@@ -32,10 +32,10 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "1E966586B33AE2A6B140ADAB"
-            BuildableName = "GHT.app"
-            BlueprintName = "GHT"
-            ReferencedContainer = "container:GHT.xcodeproj">
+            BlueprintIdentifier = "7C350C05841D66493EA1789A"
+            BuildableName = "Triage.app"
+            BlueprintName = "Triage"
+            ReferencedContainer = "container:Triage.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
@@ -44,10 +44,10 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "0C1235B4783988EFA7CFAC73"
-               BuildableName = "GHTTests.xctest"
-               BlueprintName = "GHTTests"
-               ReferencedContainer = "container:GHT.xcodeproj">
+               BlueprintIdentifier = "B6FA0A368BF7D8AD4BC57863"
+               BuildableName = "TriageTests.xctest"
+               BlueprintName = "TriageTests"
+               ReferencedContainer = "container:Triage.xcodeproj">
             </BuildableReference>
          </TestableReference>
       </Testables>
@@ -68,10 +68,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "1E966586B33AE2A6B140ADAB"
-            BuildableName = "GHT.app"
-            BlueprintName = "GHT"
-            ReferencedContainer = "container:GHT.xcodeproj">
+            BlueprintIdentifier = "7C350C05841D66493EA1789A"
+            BuildableName = "Triage.app"
+            BlueprintName = "Triage"
+            ReferencedContainer = "container:Triage.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>
@@ -87,10 +87,10 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "1E966586B33AE2A6B140ADAB"
-            BuildableName = "GHT.app"
-            BlueprintName = "GHT"
-            ReferencedContainer = "container:GHT.xcodeproj">
+            BlueprintIdentifier = "7C350C05841D66493EA1789A"
+            BuildableName = "Triage.app"
+            BlueprintName = "Triage"
+            ReferencedContainer = "container:Triage.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
       <CommandLineArguments>

@@ -38,7 +38,7 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         button.target = self
         button.action = #selector(statusClicked)
         button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-        button.toolTip = "GitHub Triage"
+        button.toolTip = "Triage"
     }
 
     static func icon(hasItems: Bool) -> NSImage {
@@ -87,7 +87,7 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
         menu.addItem(.separator())
-        menu.addItem(withTitle: "Quit GitHub Triage", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(withTitle: "Quit Triage", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.menu = menu
         item.button?.performClick(nil)
         item.menu = nil
@@ -213,7 +213,7 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
             let w = NSWindow(contentRect: NSRect(origin: .zero, size: Self.expandedSize),
                              styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
                              backing: .buffered, defer: false)
-            w.title = "GitHub Triage"
+            w.title = "Triage"
             w.titlebarAppearsTransparent = true
             w.titleVisibility = .hidden
             w.isReleasedWhenClosed = false
@@ -240,7 +240,7 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         if settingsWindow == nil {
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
                              styleMask: [.titled, .closable], backing: .buffered, defer: false)
-            w.title = "GitHub Triage Settings"
+            w.title = "Triage Settings"
             w.isReleasedWhenClosed = false
             w.contentViewController = NSHostingController(rootView: SettingsView(store: store))
             w.center()

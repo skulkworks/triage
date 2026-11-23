@@ -1,5 +1,5 @@
 import XCTest
-@testable import GHT
+@testable import Triage
 
 final class InboxQueryTests: XCTestCase {
     private func facts(title: String = "Form submit on Enter no longer works", repo: String = "getgrav/grav-plugin-admin2",

@@ -168,7 +168,7 @@ struct SignInView: View {
             Image(systemName: "tray.full")
                 .font(.system(size: 44, weight: .light))
                 .foregroundStyle(.tint)
-            Text("GitHub Triage")
+            Text("Triage")
                 .font(.title2.bold())
             Text("Sign in with the GitHub CLI (`gh auth login`), or paste a personal access token with the **notifications** and **repo** scopes.")
                 .multilineTextAlignment(.center)

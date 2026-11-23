@@ -218,7 +218,7 @@ final class InboxStore {
         details = [:]
         lastModified = nil
         seeded = false
-        auth = .signedOut(tokenSource == .githubCLI ? "Signed out. GitHub Triage will use the GitHub CLI's login again on next launch unless you paste a token." : nil)
+        auth = .signedOut(tokenSource == .githubCLI ? "Signed out. Triage will use the GitHub CLI's login again on next launch unless you paste a token." : nil)
     }
 
     private func startPolling() {

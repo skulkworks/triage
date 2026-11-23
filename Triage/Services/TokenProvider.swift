@@ -7,7 +7,7 @@ nonisolated enum TokenSource: String, Sendable {
 }
 
 nonisolated enum TokenProvider {
-    private static let service = Bundle.main.bundleIdentifier ?? "dev.skulkworks.ght"
+    private static let service = Bundle.main.bundleIdentifier ?? "dev.skulkworks.triage"
     private static let account = "github-token"
 
     static func resolve() async -> (token: String, source: TokenSource)? {
@@ -38,7 +38,7 @@ nonisolated enum TokenProvider {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecAttrLabel as String: "GitHub Triage token",
+            kSecAttrLabel as String: "Triage token",
             kSecValueData as String: Data(token.utf8),
         ]
         SecItemAdd(attrs as CFDictionary, nil)

@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Plain AppKit entry point: the app is a status item with a popover, no SwiftUI scenes to manage.
 @main
-enum GHTMain {
+enum TriageMain {
     static let delegate = AppDelegate()
 
     static func main() {
@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var status: StatusController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if CommandLine.arguments.contains("-ghtSelfTest") {
+        if CommandLine.arguments.contains("-triageSelfTest") {
             Task { await SelfTest.run(); NSApp.terminate(nil) }
             return
         }
@@ -30,21 +30,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Notifier.shared.onDone = { [weak self] id in self?.store.markDone([id]) }
         Notifier.shared.onRead = { [weak self] id in self?.store.markRead([id]) }
         store.start()
-        // Debug helpers for screenshots: -ghtShowOnLaunch, -ghtWindow, -ghtOpenThread <id>, -ghtScope <tab>, -ghtAppearance light|dark.
+        // Debug helpers for screenshots: -triageShowOnLaunch, -triageWindow, -triageOpenThread <id>, -triageScope <tab>, -triageAppearance light|dark.
         let args = CommandLine.arguments
-        if let i = args.firstIndex(of: "-ghtAppearance"), args.indices.contains(i + 1) {
+        if let i = args.firstIndex(of: "-triageAppearance"), args.indices.contains(i + 1) {
             NSApp.appearance = NSAppearance(named: args[i + 1] == "light" ? .aqua : .darkAqua)
         }
-        if args.contains("-ghtWindow") {
+        if args.contains("-triageWindow") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.status?.showWindow() }
-        } else if args.contains("-ghtShowOnLaunch") {
+        } else if args.contains("-triageShowOnLaunch") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.status?.show(thread: nil) }
         }
-        if let i = args.firstIndex(of: "-ghtOpenThread"), args.indices.contains(i + 1) {
+        if let i = args.firstIndex(of: "-triageOpenThread"), args.indices.contains(i + 1) {
             let id = args[i + 1]
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) { self.status?.show(thread: id) }
         }
-        if let i = args.firstIndex(of: "-ghtScope"), args.indices.contains(i + 1), let scope = InboxStore.Scope(rawValue: args[i + 1]) {
+        if let i = args.firstIndex(of: "-triageScope"), args.indices.contains(i + 1), let scope = InboxStore.Scope(rawValue: args[i + 1]) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 6) { self.store.scope = scope }
         }
     }
@@ -70,7 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Quit GitHub Triage", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Quit Triage", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         main.addItem(appItem)
 

@@ -1,4 +1,4 @@
-name: GHT
+name: Triage
 options:
   bundleIdPrefix: dev.skulkworks
   deploymentTarget:
@@ -27,56 +27,56 @@ settings:
     DEAD_CODE_STRIPPING: YES
 
 schemes:
-  GHT:
+  Triage:
     build:
       targets:
-        GHT: all
+        Triage: all
     run:
       config: Debug
     test:
       config: Debug
       targets:
-        - GHTTests
+        - TriageTests
     profile:
       config: Release
     archive:
       config: Release
 
 targets:
-  GHT:
+  Triage:
     type: application
     platform: macOS
     sources:
-      - path: GHT
+      - path: Triage
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_LSUIElement: YES
-        PRODUCT_MODULE_NAME: GHT
-        INFOPLIST_KEY_CFBundleDisplayName: GitHub Triage
+        PRODUCT_MODULE_NAME: Triage
+        INFOPLIST_KEY_CFBundleDisplayName: Triage
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
         INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Trilby Media"
         ENABLE_HARDENED_RUNTIME: YES
-        CODE_SIGN_ENTITLEMENTS: GHT/Resources/GHT.entitlements
+        CODE_SIGN_ENTITLEMENTS: Triage/Resources/Triage.entitlements
       configs:
         Debug:
-          PRODUCT_BUNDLE_IDENTIFIER: dev.skulkworks.ght.debug
-          PRODUCT_NAME: GitHub Triage Dev
-          INFOPLIST_KEY_CFBundleDisplayName: GitHub Triage Dev
+          PRODUCT_BUNDLE_IDENTIFIER: dev.skulkworks.triage.debug
+          PRODUCT_NAME: Triage Dev
+          INFOPLIST_KEY_CFBundleDisplayName: Triage Dev
         Release:
-          PRODUCT_BUNDLE_IDENTIFIER: dev.skulkworks.ght
-          PRODUCT_NAME: GitHub Triage
+          PRODUCT_BUNDLE_IDENTIFIER: dev.skulkworks.triage
+          PRODUCT_NAME: Triage
 
-  GHTTests:
+  TriageTests:
     type: bundle.unit-test
     platform: macOS
     sources:
       - path: Tests
     dependencies:
-      - target: GHT
+      - target: Triage
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
         SWIFT_DEFAULT_ACTOR_ISOLATION: nonisolated
         BUNDLE_LOADER: "$(TEST_HOST)"
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/GitHub Triage Dev.app/Contents/MacOS/GitHub Triage Dev"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Triage Dev.app/Contents/MacOS/Triage Dev"

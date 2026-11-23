@@ -56,7 +56,7 @@ struct LocalState: Codable {
 
     static var url: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appending(path: Bundle.main.bundleIdentifier ?? "dev.skulkworks.ght", directoryHint: .isDirectory)
+            .appending(path: Bundle.main.bundleIdentifier ?? "dev.skulkworks.triage", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appending(path: "state.json")
     }

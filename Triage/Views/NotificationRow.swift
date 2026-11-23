@@ -288,7 +288,7 @@ struct RowMenu: View {
 }
 
 extension URL {
-    /// The page link without GitHub Triage's notification referrer (for sharing).
+    /// The page link without Triage's notification referrer (for sharing).
     var absoluteStringWithoutQuery: String {
         guard var c = URLComponents(url: self, resolvingAgainstBaseURL: false) else { return absoluteString }
         c.queryItems = nil

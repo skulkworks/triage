@@ -111,7 +111,7 @@ struct InboxPane: View {
             Button("Keyboard Shortcuts", systemImage: "keyboard") { showShortcuts = true }
             Button("Settings…", systemImage: "gearshape") { windowActions.settings() }
             Divider()
-            Button("Quit GitHub Triage", systemImage: "power") { NSApp.terminate(nil) }
+            Button("Quit Triage", systemImage: "power") { NSApp.terminate(nil) }
         } label: {
             Label("More", systemImage: "ellipsis.circle")
         }
@@ -595,7 +595,7 @@ private struct ShortcutsSheet: View {
         ("⌘F", "Filter"),
         ("⌘R", "Refresh"),
         ("esc", "Close the conversation"),
-        ("\(HotKey.display)", "Show or hide GitHub Triage from anywhere"),
+        ("\(HotKey.display)", "Show or hide Triage from anywhere"),
     ]
 
     var body: some View {

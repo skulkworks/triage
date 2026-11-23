@@ -8,7 +8,7 @@ enum WebMessage {
     case open(URL)
 }
 
-/// Shows the rendered conversation. Links open in the browser (or in GitHub Triage when the thread is in the inbox).
+/// Shows the rendered conversation. Links open in the browser (or in Triage when the thread is in the inbox).
 struct ConversationWebView: NSViewRepresentable {
     var html: String
     /// Element ids to try scrolling to on first load, in order.
