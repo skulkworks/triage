@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 (2026-11-23, build 1)
+## 0.1.0 (2026-11-22, build 1)
 
 ### New
 - First release: your GitHub notifications inbox in the menu bar, with the whole conversation, replies and triage actions without opening a browser

@@ -126,7 +126,17 @@ final class InboxStore {
     var now = Date()
 
     var scope: Scope = .inbox {
-        didSet { if scope == .done, oldValue != .done { Task { await refreshDone() } } }
+        didSet {
+            guard scope != oldValue else { return }
+            // Done lists different threads from the other tabs, so the open thread and the selection
+            // don't carry across: e must never act on a thread that isn't in the list on screen.
+            if (scope == .done) != (oldValue == .done) {
+                let wantDone = scope == .done
+                if let f = focused, isDone(f) != wantDone { focused = nil }
+                selection = selection.filter { isDone($0) == wantDone }
+            }
+            if scope == .done { Task { await refreshDone() } }
+        }
     }
     var quickFilter: QuickFilter = .all
     var search = ""
@@ -152,6 +162,10 @@ final class InboxStore {
     private var detailRevision: [String: String] = [:]
     /// Bumped on sign-in and sign-out, so replies to requests made for another account are dropped.
     private var session = 0
+    /// The thread ids GitHub listed in the inbox on the last full fetch (without restored threads),
+    /// and whether that list was complete.
+    private var inboxIDs: Set<String> = []
+    private var inboxComplete = false
     /// Done/unsubscribe requests on the wire right now (quit waits for them).
     private(set) var committing = 0
     private var lastModified: String?
@@ -213,6 +227,9 @@ final class InboxStore {
         notifications = []
         done = []
         doneLastModified = nil
+        inboxIDs = []
+        inboxComplete = false
+        detailLoading = []
         info = [:]
         infoRevision = [:]
         details = [:]
@@ -272,15 +289,22 @@ final class InboxStore {
             let result = try await client.notifications(done: true, ifModifiedSince: doneLastModified, maxPages: 4)
             guard session == self.session, case .updated(let list, let lastModified, _, let complete) = result else { return }
             doneLastModified = lastModified
-            let inbox = Set(notifications.map(\.id))
-            done = list.filter { !inbox.contains($0.id) || local.restored.contains($0.id) }.sorted { $0.updatedAt > $1.updatedAt }
-            // A thread restored before this launch needs its done entry to show in the inbox.
-            let missing = done.filter { local.restored.contains($0.id) && !inbox.contains($0.id) }
+            done = list.filter { !inboxIDs.contains($0.id) }.sorted { $0.updatedAt > $1.updatedAt }
+            // A thread restored by an older build has no stored record yet: take it from here.
+            var missing: [GHNotification] = []
+            for n in done where local.restored.contains(n.id) {
+                if local.restoredThreads[n.id] == nil { local.restoredThreads[n.id] = n }
+                if !notifications.contains(where: { $0.id == n.id }) { missing.append(n) }
+            }
             if !missing.isEmpty { notifications = (notifications + missing).sorted { $0.updatedAt > $1.updatedAt } }
-            if complete {
+            // A restored thread GitHub lists nowhere any more (deleted, or the repo is gone) is finished.
+            if complete, inboxComplete {
                 let known = Set(list.map(\.id))
-                let gone = local.restored.filter { !known.contains($0) && !inbox.contains($0) }
-                if !gone.isEmpty { local.restored.subtract(gone) }
+                let gone = local.restored.filter { !known.contains($0) && !inboxIDs.contains($0) }
+                if !gone.isEmpty {
+                    local.restored.subtract(gone)
+                    notifications.removeAll { gone.contains($0.id) }
+                }
             }
             await enrich()
         } catch {
@@ -292,16 +316,24 @@ final class InboxStore {
     private func apply(_ list: [GHNotification], complete: Bool) {
         // New activity puts a thread back in GitHub's own inbox, so it no longer needs restoring.
         let inbox = Set(list.map(\.id))
+        inboxIDs = inbox
+        inboxComplete = complete
         if !local.restored.isDisjoint(with: inbox) { local.restored.subtract(inbox) }
-        let restored = done.filter { local.restored.contains($0.id) }
-        let merged = list + restored.map { r in notifications.first { $0.id == r.id } ?? r }
+        // The same goes for the Done tab: a thread can't be in both.
+        if done.contains(where: { inbox.contains($0.id) }) { done.removeAll { inbox.contains($0.id) } }
+        // Restored threads come from the stored record, so they survive a relaunch and dropping out of
+        // the done list; the copy already in the list wins, since it carries reads made here.
+        let restored = local.restored.compactMap { id in
+            notifications.first { $0.id == id } ?? done.first { $0.id == id } ?? local.restoredThreads[id]
+        }
+        let merged = list + restored
         let ids = Set(merged.map(\.id))
         var fresh = merged.sorted { $0.updatedAt > $1.updatedAt }
         // GitHub reports these as read; the app keeps them unread until they're opened or read here.
         for i in fresh.indices where local.markedUnread.contains(fresh[i].id) { fresh[i].unread = true }
         if complete, !local.markedUnread.isSubset(of: ids) { local.markedUnread.formIntersection(ids) }
         notifications = fresh
-        selection = selection.intersection(ids)
+        selection = selection.intersection(ids.union(done.map(\.id)))
         // A detail cached for an older revision is stale; the open one reloads in place.
         for n in fresh where details[n.id] != nil && detailRevision[n.id] != n.revisionKey {
             if n.id == focused {
@@ -505,8 +537,10 @@ final class InboxStore {
     /// The threads an action applies to: the multi-selection, else the open thread.
     var targets: [String] {
         if selection.count > 1 { return orderedIDs.filter { selection.contains($0) } }
-        if let focused { return [focused] }
-        return Array(selection)
+        // Only threads that belong to the tab on screen: e in Done must never mark an inbox thread done.
+        let wantDone = scope == .done
+        if let focused { return isDone(focused) == wantDone ? [focused] : [] }
+        return selection.filter { isDone($0) == wantDone }
     }
 
     func open(_ id: String) {
@@ -572,6 +606,7 @@ final class InboxStore {
         guard !list.isEmpty else { return }
         advance(past: list.map(\.id))
         local.restored.formUnion(list.map(\.id))
+        for n in list { local.restoredThreads[n.id] = n }
         notifications = (notifications + list).sorted { $0.updatedAt > $1.updatedAt }
         let noun = list.count == 1 ? "1 notification" : "\(list.count) notifications"
         toast = Toast(message: "Moved \(noun) to the inbox (in this app only)")
@@ -606,7 +641,11 @@ final class InboxStore {
         pendingTasks[action.id] = nil
         pending.removeAll { $0.id == action.id }
         hidden.subtract(action.threadIDs)
-        if action.threadIDs.count == 1 { open(action.threadIDs[0]) }
+        if action.threadIDs.count == 1 {
+            let id = action.threadIDs[0]
+            if scope == .done, !isDone(id) { scope = .inbox }
+            open(id)
+        }
     }
 
     private func commit(_ actionID: UUID) async {
@@ -638,6 +677,8 @@ final class InboxStore {
         notifications.removeAll { finished.contains($0.id) }
         hidden.subtract(action.threadIDs)
         if !local.restored.isDisjoint(with: finished) { local.restored.subtract(finished) }
+        // It has left GitHub's inbox too, so the next Done fetch keeps it.
+        inboxIDs.subtract(finished)
         for id in finished {
             local.saved.remove(id)
             local.snoozed[id] = nil
@@ -660,6 +701,9 @@ final class InboxStore {
     func markRead(_ ids: [String]) {
         guard let client else { return }
         if !local.markedUnread.isDisjoint(with: ids) { local.markedUnread.subtract(ids) }
+        // A restored thread's stored record is what the inbox shows after a relaunch.
+        let stale = ids.filter { local.restoredThreads[$0]?.unread == true }
+        if !stale.isEmpty { for id in stale { local.restoredThreads[id]?.unread = false } }
         for id in ids {
             // A done thread can still be unread (done straight from the list); reading it there clears that too.
             if let d = done.firstIndex(where: { $0.id == id }), done[d].unread {
@@ -697,6 +741,9 @@ final class InboxStore {
         let stamp = Date()
         let wasUnread = Set(notifications.filter(\.unread).map(\.id))
         for i in notifications.indices { notifications[i].unread = false }
+        if local.restoredThreads.values.contains(where: \.unread) {
+            local.restoredThreads = local.restoredThreads.mapValues { var n = $0; n.unread = false; return n }
+        }
         Notifier.shared.removeAll()
         Task {
             do { try await client.markAllRead(before: stamp) } catch {
@@ -776,11 +823,13 @@ final class InboxStore {
         guard let client, let n = notification(id) else { return }
         if !force, details[id] != nil { return }
         guard !detailLoading.contains(id) else { return }
+        let session = self.session
         detailLoading.insert(id)
         detailErrors[id] = nil
-        defer { detailLoading.remove(id) }
+        defer { if session == self.session { detailLoading.remove(id) } }
         do {
             let detail: ThreadDetail
+            var subject: SubjectInfo?
             switch n.kind {
             case .issue, .pullRequest:
                 guard let number = n.number else { detail = .unsupported; break }
@@ -788,30 +837,40 @@ final class InboxStore {
                 let r = try await client.graphQL(Queries.detail, variables: ["owner": n.owner, "name": n.repoName, "number": number], as: R.self)
                 guard let s = r.repository?.issueOrPullRequest else { throw GitHubError.graphQL(["This thread is no longer available."]) }
                 detail = .conversation(s)
-                info[id] = SubjectInfo(s)
-                infoRevision[id] = n.revisionKey
+                subject = SubjectInfo(s)
             case .discussion:
                 let number = try await discussionNumber(n)
                 nonisolated struct R: Decodable, Sendable { nonisolated struct Repo: Decodable, Sendable { var discussion: GQLSubject? }; var repository: Repo? }
                 let r = try await client.graphQL(Queries.discussionDetail, variables: ["owner": n.owner, "name": n.repoName, "number": number], as: R.self)
                 guard let s = r.repository?.discussion else { throw GitHubError.graphQL(["This discussion is no longer available."]) }
                 detail = .conversation(s)
-                info[id] = SubjectInfo(s)
-                infoRevision[id] = n.revisionKey
+                subject = SubjectInfo(s)
             case .release:
                 guard let url = n.subject.url else { detail = .unsupported; break }
                 let release = try await client.release(apiURL: url)
                 detail = .release(release)
-                info[id] = SubjectInfo(release: release)
+                subject = SubjectInfo(release: release)
             default:
                 detail = .unsupported
+            }
+            // Signed out meanwhile, or the thread changed while this was in flight: an old revision isn't cached.
+            guard session == self.session else { return }
+            guard notification(id)?.revisionKey == n.revisionKey else {
+                if focused == id { Task { await loadDetail(id, force: true) } }
+                return
+            }
+            if let subject {
+                info[id] = subject
+                if n.kind != .release { infoRevision[id] = n.revisionKey }
             }
             details[id] = detail
             detailRevision[id] = n.revisionKey
         } catch {
             // Moving to another thread cancels the fetch; that isn't worth an error page.
             if error is CancellationError || (error as? URLError)?.code == .cancelled { return }
-            if !quiet { detailErrors[id] = error.localizedDescription }
+            guard session == self.session else { return }
+            // A prefetch fails quietly, unless the thread was opened meanwhile: then the pane shows it.
+            if !quiet || focused == id { detailErrors[id] = error.localizedDescription }
         }
     }
 

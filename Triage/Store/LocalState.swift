@@ -27,7 +27,15 @@ struct LocalState: Codable {
     var markedUnread: Set<String> = []
     /// Done threads moved back to the inbox in the app. GitHub's API has no "move to inbox", so on
     /// github.com they stay done. New activity puts a thread back in GitHub's inbox, which ends this.
-    var restored: Set<String> = []
+    var restored: Set<String> = [] {
+        didSet {
+            if restoredThreads.keys.contains(where: { !restored.contains($0) }) {
+                restoredThreads = restoredThreads.filter { restored.contains($0.key) }
+            }
+        }
+    }
+    /// The record of each restored thread, so it stays in the inbox after it drops out of the done threads GitHub lists.
+    var restoredThreads: [String: GHNotification] = [:]
     var filters: [SavedFilter] = [
         SavedFilter(name: "Needs me", query: "reason:mention,assign,review_requested,team_mention is:open"),
         SavedFilter(name: "Finished", query: "is:closed,merged"),
@@ -50,6 +58,7 @@ struct LocalState: Codable {
         snoozed = try c.decodeIfPresent([String: Snooze].self, forKey: .snoozed) ?? d.snoozed
         markedUnread = try c.decodeIfPresent(Set<String>.self, forKey: .markedUnread) ?? d.markedUnread
         restored = try c.decodeIfPresent(Set<String>.self, forKey: .restored) ?? d.restored
+        restoredThreads = try c.decodeIfPresent([String: GHNotification].self, forKey: .restoredThreads) ?? d.restoredThreads
         filters = try c.decodeIfPresent([SavedFilter].self, forKey: .filters) ?? d.filters
         snippets = try c.decodeIfPresent([Snippet].self, forKey: .snippets) ?? d.snippets
     }

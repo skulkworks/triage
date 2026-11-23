@@ -90,10 +90,15 @@ dmg_name() { echo "$APP_NAME-$(resolve_version "$1")-$(resolve_build).dmg"; }
 
 do_appcast() {
     local version; version=$(resolve_version "$1")
+    local name; name=$(dmg_name "$version")
     # Point the appcast at R2: the enclosure is the build-stamped DMG, the feed lives at
     # https://$UPDATES_HOST/$UPDATES_PREFIX/appcast.xml.
     export PAGES_HOST="$UPDATES_HOST"
-    export DOWNLOAD_URL="https://$UPDATES_HOST/$UPDATES_PREFIX/$(dmg_name "$version")"
+    export DOWNLOAD_URL="https://$UPDATES_HOST/$UPDATES_PREFIX/$name"
+    # Sparkle offers the update only to Macs the built app actually runs on.
+    MIN_SYSTEM_VERSION=$(/usr/libexec/PlistBuddy -c "Print LSMinimumSystemVersion" \
+        "$BUILD_DIR/$APP_NAME.app/Contents/Info.plist")
+    export MIN_SYSTEM_VERSION
     "$DEN_DIR/scripts/generate-appcast.sh" "$version"
 }
 
@@ -107,8 +112,24 @@ do_verify() {
     "$DEN_DIR/scripts/verify-publish.sh" "$version" "$(resolve_build)"
 }
 
+# Prints the commit the DMG was built from, after checking that an existing tag for
+# this version points at it. Runs before anything is published.
+check_source() {
+    local version="$1"
+    local source="$BUILD_DIR/.source-commit"
+    [ -f "$source" ] || { echo "[ERROR] $source not found: build with scripts/release.sh build" >&2; exit 1; }
+    local commit; commit=$(cat "$source")
+    if git -C "$PROJECT_ROOT" rev-parse -q --verify "refs/tags/$version" >/dev/null &&
+       [ "$(git -C "$PROJECT_ROOT" rev-parse "$version^{commit}")" != "$commit" ]; then
+        echo "[ERROR] Tag $version points at a different commit from the build ($commit)." >&2
+        exit 1
+    fi
+    echo "$commit"
+}
+
 do_publish() {
     local version; version=$(resolve_version "$1")
+    check_source "$version" >/dev/null
     local name; name=$(dmg_name "$version")
     local dmg="$BUILD_DIR/$APP_NAME.dmg"
     local appcast="$PROJECT_ROOT/docs/appcast.xml"
@@ -131,11 +152,30 @@ do_publish() {
         fi
     fi
 
-    echo "[INFO] Uploading $name to R2 ($R2_BUCKET/$UPDATES_PREFIX)..."
-    aws s3 cp "$dmg" "s3://$R2_BUCKET/$UPDATES_PREFIX/$name" \
-        --profile "$R2_PROFILE" --endpoint-url "$R2_ENDPOINT" \
-        --content-type "application/x-apple-diskimage" \
-        --cache-control "public, max-age=31536000, immutable"
+    # The DMG is served as immutable, so a version-build that's already live is never
+    # replaced: different bytes would disagree with cached copies, the appcast signature
+    # and the cask checksum. Re-running with the same DMG (after a failure further on) skips it.
+    local live; live=$(mktemp)
+    local status; status=$(curl -sL -o "$live" -w '%{http_code}' "https://$UPDATES_HOST/$UPDATES_PREFIX/$name" || echo 000)
+    if [ "$status" = "200" ]; then
+        if [ "$(shasum -a 256 < "$live")" != "$(shasum -a 256 < "$dmg")" ]; then
+            rm -f "$live"
+            echo "[ERROR] $name is already live with different bytes - bump the build number." >&2
+            exit 1
+        fi
+        echo "[INFO] $name is already live with the same bytes; not uploading it again."
+    elif [ "$status" != "404" ]; then
+        rm -f "$live"
+        echo "[ERROR] Couldn't tell whether $name is already live (HTTP $status) - not uploading." >&2
+        exit 1
+    else
+        echo "[INFO] Uploading $name to R2 ($R2_BUCKET/$UPDATES_PREFIX)..."
+        aws s3 cp "$dmg" "s3://$R2_BUCKET/$UPDATES_PREFIX/$name" \
+            --profile "$R2_PROFILE" --endpoint-url "$R2_ENDPOINT" \
+            --content-type "application/x-apple-diskimage" \
+            --cache-control "public, max-age=31536000, immutable"
+    fi
+    rm -f "$live"
 
     # Changelog feed for the website and the in-app What's New window. No-cache like
     # the appcast, so a new release's notes show up immediately.
@@ -201,13 +241,14 @@ do_github() {
 
     cd "$PROJECT_ROOT"
 
-    # The tag is created here rather than by hand, so it always lands on the commit
-    # that was actually published.
+    # The tag is created here rather than by hand, on the commit the build was made
+    # from (recorded by the build step), and an existing tag must already point there.
+    local commit; commit=$(check_source "$version")
     if git rev-parse -q --verify "refs/tags/$version" >/dev/null; then
-        echo "[INFO] Tag $version already exists locally."
+        echo "[INFO] Tag $version already exists at the built commit."
     else
-        echo "[INFO] Tagging $version at $(git rev-parse --short HEAD)..."
-        git tag -a "$version" -m "$APP_NAME $version"
+        echo "[INFO] Tagging $version at ${commit:0:7}..."
+        git tag -a "$version" "$commit" -m "$APP_NAME $version"
     fi
     git push origin "refs/tags/$version"
 
@@ -238,12 +279,30 @@ do_github() {
     echo "  https://github.com/$GITHUB_REPO/releases/tag/$version"
 }
 
+# Releases are built from a committed tree, and the commit is recorded so the tag
+# lands on exactly the source that was built. TRIAGE_ALLOW_DIRTY=1 skips the check
+# for a local test build.
+do_build() {
+    cd "$PROJECT_ROOT"
+    if [ "${TRIAGE_ALLOW_DIRTY:-0}" != "1" ] && [ -n "$(git status --porcelain)" ]; then
+        echo "[ERROR] The working tree has uncommitted changes - commit them before building a release." >&2
+        git status --short >&2
+        exit 1
+    fi
+    local commit; commit=$(git rev-parse HEAD)
+    local before; before=$(stat -f %m "$BUILD_DIR/$APP_NAME.dmg" 2>/dev/null || echo 0)
+    "$DEN_DIR/scripts/build-release.sh" "$@"
+    # Only a build that made a new DMG records its source (not --help and the like).
+    local after; after=$(stat -f %m "$BUILD_DIR/$APP_NAME.dmg" 2>/dev/null || echo 0)
+    if [ "$after" != "$before" ]; then echo "$commit" > "$BUILD_DIR/.source-commit"; fi
+}
+
 command="${1:-build}"
 shift || true
 
 case "$command" in
     build)
-        "$DEN_DIR/scripts/build-release.sh" "$@"
+        do_build "$@"
         ;;
     changelog)
         "$DEN_DIR/scripts/generate-changelog.sh" "$@"
@@ -264,7 +323,7 @@ case "$command" in
         do_github "$@"
         ;;
     release)
-        "$DEN_DIR/scripts/build-release.sh" "$@"
+        do_build "$@"
         "$DEN_DIR/scripts/generate-changelog.sh"
         do_appcast ""
         do_publish ""
