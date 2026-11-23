@@ -30,8 +30,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Notifier.shared.onDone = { [weak self] id in self?.store.markDone([id]) }
         Notifier.shared.onRead = { [weak self] id in self?.store.markRead([id]) }
         store.start()
-        // Debug helpers for screenshots: -ghtShowOnLaunch, -ghtWindow, -ghtOpenThread <id>.
+        // Debug helpers for screenshots: -ghtShowOnLaunch, -ghtWindow, -ghtOpenThread <id>, -ghtScope <tab>, -ghtAppearance light|dark.
         let args = CommandLine.arguments
+        if let i = args.firstIndex(of: "-ghtAppearance"), args.indices.contains(i + 1) {
+            NSApp.appearance = NSAppearance(named: args[i + 1] == "light" ? .aqua : .darkAqua)
+        }
         if args.contains("-ghtWindow") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.status?.showWindow() }
         } else if args.contains("-ghtShowOnLaunch") {
@@ -40,6 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let i = args.firstIndex(of: "-ghtOpenThread"), args.indices.contains(i + 1) {
             let id = args[i + 1]
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) { self.status?.show(thread: id) }
+        }
+        if let i = args.firstIndex(of: "-ghtScope"), args.indices.contains(i + 1), let scope = InboxStore.Scope(rawValue: args[i + 1]) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { self.store.scope = scope }
         }
     }
 

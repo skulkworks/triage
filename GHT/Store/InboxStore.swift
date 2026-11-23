@@ -64,7 +64,7 @@ final class InboxStore {
     enum Auth: Equatable { case checking, signedOut(String?), signedIn }
 
     enum Scope: String, CaseIterable, Identifiable {
-        case inbox, unread, saved, snoozed
+        case inbox, unread, saved, snoozed, done
         var id: String { rawValue }
         var label: String { rawValue.capitalized }
         var symbol: String {
@@ -73,6 +73,7 @@ final class InboxStore {
             case .unread: "circle.fill"
             case .saved: "bookmark"
             case .snoozed: "moon.zzz"
+            case .done: "checkmark.circle"
             }
         }
     }
@@ -111,6 +112,9 @@ final class InboxStore {
     var viewer: Viewer?
     var tokenSource: TokenSource?
     var notifications: [GHNotification] = []
+    /// Threads marked done, newest activity first. Fetched while the Done tab is open, or while a thread
+    /// moved back to the inbox needs it. Threads in `local.restored` show in the inbox instead.
+    var done: [GHNotification] = []
     var info: [String: SubjectInfo] = [:]
     var local = LocalState.load() { didSet { local.save() } }
     var hidden: Set<String> = []
@@ -121,7 +125,9 @@ final class InboxStore {
     var lastError: String?
     var now = Date()
 
-    var scope: Scope = .inbox
+    var scope: Scope = .inbox {
+        didSet { if scope == .done, oldValue != .done { Task { await refreshDone() } } }
+    }
     var quickFilter: QuickFilter = .all
     var search = ""
     var selection: Set<String> = []
@@ -149,6 +155,7 @@ final class InboxStore {
     /// Done/unsubscribe requests on the wire right now (quit waits for them).
     private(set) var committing = 0
     private var lastModified: String?
+    private var doneLastModified: String?
     private var pollInterval = 60
     private var pollTask: Task<Void, Never>?
     private var pendingTasks: [UUID: Task<Void, Never>] = [:]
@@ -204,6 +211,8 @@ final class InboxStore {
         client = nil
         viewer = nil
         notifications = []
+        done = []
+        doneLastModified = nil
         info = [:]
         infoRevision = [:]
         details = [:]
@@ -243,8 +252,10 @@ final class InboxStore {
                 self.lastModified = lastModified
                 apply(list, complete: complete)
                 await enrich()
+                prefetch(notifications.lazy.filter { !self.isSnoozed($0) }.prefix(Self.prefetchCount).map(\.id))
             }
             guard session == self.session else { return }
+            if scope == .done || !local.restored.isEmpty { await refreshDone() }
             lastRefreshed = Date()
             lastError = nil
         } catch {
@@ -253,9 +264,42 @@ final class InboxStore {
         }
     }
 
+    /// Fetches the done threads (the most recent 200). An unchanged list (304) is free.
+    func refreshDone() async {
+        guard let client else { return }
+        let session = self.session
+        do {
+            let result = try await client.notifications(done: true, ifModifiedSince: doneLastModified, maxPages: 4)
+            guard session == self.session, case .updated(let list, let lastModified, _, let complete) = result else { return }
+            doneLastModified = lastModified
+            let inbox = Set(notifications.map(\.id))
+            done = list.filter { !inbox.contains($0.id) || local.restored.contains($0.id) }.sorted { $0.updatedAt > $1.updatedAt }
+            // A thread restored before this launch needs its done entry to show in the inbox.
+            let missing = done.filter { local.restored.contains($0.id) && !inbox.contains($0.id) }
+            if !missing.isEmpty { notifications = (notifications + missing).sorted { $0.updatedAt > $1.updatedAt } }
+            if complete {
+                let known = Set(list.map(\.id))
+                let gone = local.restored.filter { !known.contains($0) && !inbox.contains($0) }
+                if !gone.isEmpty { local.restored.subtract(gone) }
+            }
+            await enrich()
+        } catch {
+            guard session == self.session else { return }
+            lastError = error.localizedDescription
+        }
+    }
+
     private func apply(_ list: [GHNotification], complete: Bool) {
-        let ids = Set(list.map(\.id))
-        let fresh = list.sorted { $0.updatedAt > $1.updatedAt }
+        // New activity puts a thread back in GitHub's own inbox, so it no longer needs restoring.
+        let inbox = Set(list.map(\.id))
+        if !local.restored.isDisjoint(with: inbox) { local.restored.subtract(inbox) }
+        let restored = done.filter { local.restored.contains($0.id) }
+        let merged = list + restored.map { r in notifications.first { $0.id == r.id } ?? r }
+        let ids = Set(merged.map(\.id))
+        var fresh = merged.sorted { $0.updatedAt > $1.updatedAt }
+        // GitHub reports these as read; the app keeps them unread until they're opened or read here.
+        for i in fresh.indices where local.markedUnread.contains(fresh[i].id) { fresh[i].unread = true }
+        if complete, !local.markedUnread.isSubset(of: ids) { local.markedUnread.formIntersection(ids) }
         notifications = fresh
         selection = selection.intersection(ids)
         // A detail cached for an older revision is stale; the open one reloads in place.
@@ -280,7 +324,7 @@ final class InboxStore {
     private func enrich() async {
         guard let client else { return }
         let session = self.session
-        let todo = notifications.filter { n in
+        let todo = (notifications + done).filter { n in
             n.number != nil && infoRevision[n.id] != n.revisionKey && (n.kind == .issue || n.kind == .pullRequest || n.kind == .discussion)
         }
         guard !todo.isEmpty else { return }
@@ -348,25 +392,34 @@ final class InboxStore {
         case .unread: return n.unread && !isSnoozed(n)
         case .saved: return local.saved.contains(n.id)
         case .snoozed: return isSnoozed(n)
+        case .done: return !local.restored.contains(n.id)
         }
+    }
+
+    /// The list a scope draws from: the done threads for Done, the inbox for the rest.
+    private func source(_ scope: Scope) -> [GHNotification] { scope == .done ? done : notifications }
+
+    /// True for a thread that's done (not in the inbox), so the UI offers Move to Inbox instead of Done.
+    func isDone(_ id: String) -> Bool {
+        !notifications.contains { $0.id == id } && done.contains { $0.id == id }
     }
 
     var visible: [GHNotification] {
         let q = activeQuery
         // The open thread stays put even if it stops matching (Unread, once it's read), so j/k and Done keep their place.
-        return notifications.filter { n in
+        return source(scope).filter { n in
             (n.id == focused && !hidden.contains(n.id)) || (inScope(n, scope) && (q.isEmpty || q.matches(facts(n))))
         }
     }
 
-    func count(_ scope: Scope) -> Int { notifications.count { inScope($0, scope) } }
+    func count(_ scope: Scope) -> Int { source(scope).count { inScope($0, scope) } }
 
     func count(_ filter: QuickFilter) -> Int {
         var parts: [String] = []
         if case .custom(let id) = filter, let f = local.filters.first(where: { $0.id == id }) { parts.append(f.query) }
         if let q = filter.query { parts.append(q) }
         let q = InboxQuery(parts.joined(separator: " "))
-        return notifications.count { inScope($0, scope) && (q.isEmpty || q.matches(facts($0))) }
+        return source(scope).count { inScope($0, scope) && (q.isEmpty || q.matches(facts($0))) }
     }
 
     var badgeCount: Int {
@@ -375,7 +428,7 @@ final class InboxStore {
 
     var repositories: [(name: String, count: Int)] {
         var counts: [String: Int] = [:]
-        for n in notifications where inScope(n, scope) { counts[n.repository.fullName, default: 0] += 1 }
+        for n in source(scope) where inScope(n, scope) { counts[n.repository.fullName, default: 0] += 1 }
         return counts.map { ($0.key, $0.value) }.sorted { $0.count == $1.count ? $0.name < $1.name : $0.count > $1.count }
     }
 
@@ -422,7 +475,7 @@ final class InboxStore {
 
     func notification(_ id: String?) -> GHNotification? {
         guard let id else { return nil }
-        return notifications.first { $0.id == id }
+        return notifications.first { $0.id == id } ?? done.first { $0.id == id }
     }
 
     func webURL(_ n: GHNotification) -> URL {
@@ -461,6 +514,8 @@ final class InboxStore {
         focused = id
         selection = [id]
         Task { await loadDetail(id) }
+        let ids = orderedIDs
+        if let i = ids.firstIndex(of: id) { prefetch([i + 1, i - 1].filter(ids.indices.contains).map { ids[$0] }) }
         if prefs.markReadOnOpen, let n = notification(id), n.unread { markRead([id]) }
     }
 
@@ -508,7 +563,24 @@ final class InboxStore {
 
     // MARK: Inbox actions
 
-    func markDone(_ ids: [String]) { queue(.done, ids) }
+    func markDone(_ ids: [String]) { queue(.done, ids.filter { !isDone($0) }) }
+
+    /// App-only: GitHub's API has no "move to inbox", so on github.com the thread stays done. It shows in
+    /// the inbox here until it's marked done again, or new activity puts it back in GitHub's inbox anyway.
+    func moveToInbox(_ ids: [String]) {
+        let list = ids.filter(isDone).compactMap { id in done.first { $0.id == id } }
+        guard !list.isEmpty else { return }
+        advance(past: list.map(\.id))
+        local.restored.formUnion(list.map(\.id))
+        notifications = (notifications + list).sorted { $0.updatedAt > $1.updatedAt }
+        let noun = list.count == 1 ? "1 notification" : "\(list.count) notifications"
+        toast = Toast(message: "Moved \(noun) to the inbox (in this app only)")
+    }
+
+    /// e in the Done tab moves the thread back; everywhere else it marks it done.
+    func toggleDone(_ ids: [String]) {
+        if !ids.isEmpty, ids.allSatisfy(isDone) { moveToInbox(ids) } else { markDone(ids) }
+    }
     func unsubscribe(_ ids: [String]) { queue(.unsubscribe, ids) }
 
     private func queue(_ kind: PendingAction.Kind, _ ids: [String]) {
@@ -559,10 +631,14 @@ final class InboxStore {
             }
             for await (id, ok) in group where !ok { failed.append(id) }
         }
-        let done = Set(action.threadIDs).subtracting(failed)
-        notifications.removeAll { done.contains($0.id) }
+        let finished = Set(action.threadIDs).subtracting(failed)
+        // They show in the Done tab straight away, without waiting for its next fetch.
+        let moved = finished.compactMap { id in notifications.first { $0.id == id } ?? done.first { $0.id == id } }
+        done = (moved + done.filter { !finished.contains($0.id) }).sorted { $0.updatedAt > $1.updatedAt }
+        notifications.removeAll { finished.contains($0.id) }
         hidden.subtract(action.threadIDs)
-        for id in done {
+        if !local.restored.isDisjoint(with: finished) { local.restored.subtract(finished) }
+        for id in finished {
             local.saved.remove(id)
             local.snoozed[id] = nil
             details[id] = nil
@@ -583,7 +659,13 @@ final class InboxStore {
 
     func markRead(_ ids: [String]) {
         guard let client else { return }
+        if !local.markedUnread.isDisjoint(with: ids) { local.markedUnread.subtract(ids) }
         for id in ids {
+            // A done thread can still be unread (done straight from the list); reading it there clears that too.
+            if let d = done.firstIndex(where: { $0.id == id }), done[d].unread {
+                done[d].unread = false
+                if !notifications.contains(where: { $0.id == id }) { Task { try? await client.markRead(thread: id) } }
+            }
             guard let i = notifications.firstIndex(where: { $0.id == id }), notifications[i].unread else { continue }
             notifications[i].unread = false
             Notifier.shared.remove(threadID: id)
@@ -595,8 +677,23 @@ final class InboxStore {
         }
     }
 
+    /// App-only: GitHub's API has no way to mark a thread unread, so github.com keeps showing it as read.
+    func markUnread(_ ids: [String]) {
+        for id in ids {
+            guard let i = notifications.firstIndex(where: { $0.id == id }), !notifications[i].unread else { continue }
+            notifications[i].unread = true
+            local.markedUnread.insert(id)
+        }
+    }
+
+    /// Read if any of them is unread, otherwise unread.
+    func toggleRead(_ ids: [String]) {
+        if ids.contains(where: { notification($0)?.unread == true }) { markRead(ids) } else { markUnread(ids) }
+    }
+
     func markAllRead() {
         guard let client else { return }
+        if !local.markedUnread.isEmpty { local.markedUnread = [] }
         let stamp = Date()
         let wasUnread = Set(notifications.filter(\.unread).map(\.id))
         for i in notifications.indices { notifications[i].unread = false }
@@ -611,13 +708,16 @@ final class InboxStore {
     }
 
     func toggleSaved(_ ids: [String]) {
+        // Saved and Snoozed list inbox threads; move a done thread to the inbox first.
+        let ids = ids.filter { !isDone($0) }
+        guard !ids.isEmpty else { return }
         let allSaved = ids.allSatisfy { local.saved.contains($0) }
         for id in ids { if allSaved { local.saved.remove(id) } else { local.saved.insert(id) } }
         toast = Toast(message: allSaved ? "Removed from Saved" : "Saved")
     }
 
     func snooze(_ ids: [String], until: Date) {
-        let list = ids.compactMap { notification($0) }
+        let list = ids.filter { !isDone($0) }.compactMap { notification($0) }
         guard !list.isEmpty else { return }
         if scope != .snoozed { advance(past: ids) }
         for n in list { local.snoozed[n.id] = LocalState.Snooze(until: until, updatedAt: n.updatedAt) }
@@ -649,7 +749,30 @@ final class InboxStore {
 
     // MARK: Detail
 
-    func loadDetail(_ id: String, force: Bool = false) async {
+    /// How many of the newest inbox threads get their conversation fetched after each refresh.
+    static let prefetchCount = 25
+
+    /// Fetches conversations ahead of time, four at a time, so opening a thread doesn't wait on GitHub:
+    /// the newest inbox threads after each refresh, and the threads either side of the open one (for j and k).
+    /// Changed threads drop their cached conversation in `apply`, so this fetches only what's new.
+    private func prefetch(_ ids: [String]) {
+        let todo = ids.filter { details[$0] == nil && !detailLoading.contains($0) }
+        guard !todo.isEmpty else { return }
+        Task {
+            await withTaskGroup(of: Void.self) { group in
+                var queue = todo.makeIterator()
+                for _ in 0..<4 {
+                    if let id = queue.next() { group.addTask { await self.loadDetail(id, quiet: true) } }
+                }
+                while await group.next() != nil {
+                    if let id = queue.next() { group.addTask { await self.loadDetail(id, quiet: true) } }
+                }
+            }
+        }
+    }
+
+    /// `quiet` is for prefetching: a failure isn't shown, and opening the thread tries again.
+    func loadDetail(_ id: String, force: Bool = false, quiet: Bool = false) async {
         guard let client, let n = notification(id) else { return }
         if !force, details[id] != nil { return }
         guard !detailLoading.contains(id) else { return }
@@ -686,7 +809,9 @@ final class InboxStore {
             details[id] = detail
             detailRevision[id] = n.revisionKey
         } catch {
-            detailErrors[id] = error.localizedDescription
+            // Moving to another thread cancels the fetch; that isn't worth an error page.
+            if error is CancellationError || (error as? URLError)?.code == .cancelled { return }
+            if !quiet { detailErrors[id] = error.localizedDescription }
         }
     }
 

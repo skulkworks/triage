@@ -25,15 +25,18 @@ struct Composer: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if draft.isEmpty {
                     Text(subject.locked == true ? "Conversation is locked" : "Reply… Markdown works, ⌘↩ sends")
-                        .foregroundStyle(.tertiary)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.secondary)
                         .padding(.leading, 5)
                         .allowsHitTesting(false)
+                        .accessibilityHidden(true)
                 }
             }
-            .padding(8)
-            .background(RoundedRectangle(cornerRadius: 8).fill(Color(nsColor: .textBackgroundColor)))
-            .overlay(RoundedRectangle(cornerRadius: 8).strokeBorder(focused ? AnyShapeStyle(.tint) : AnyShapeStyle(.separator), lineWidth: focused ? 1.5 : 0.5))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 8)
+            .background(FieldBackground(focused: focused, radius: 10))
             .animation(.snappy(duration: 0.15), value: focused)
+            .accessibilityLabel("Reply")
 
             HStack(spacing: 8) {
                 snippets
@@ -54,7 +57,9 @@ struct Composer: View {
             }
             .controlSize(.regular)
         }
-        .padding(12)
+        .padding(.horizontal, 14)
+        .padding(.top, 12)
+        .padding(.bottom, 12)
         .onChange(of: store.replyFocusRequest) { focused = true }
     }
 
@@ -71,6 +76,8 @@ struct Composer: View {
         } label: {
             Label("Snippets", systemImage: "text.bubble")
         }
+        .menuStyle(.button)
+        .buttonStyle(.borderless)
         .menuIndicator(.hidden)
         .fixedSize()
         .help("Insert a saved reply")

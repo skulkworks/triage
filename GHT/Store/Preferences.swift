@@ -30,6 +30,8 @@ final class Preferences {
     var undoSeconds: Double { didSet { d.set(undoSeconds, forKey: "undoSeconds") } }
     /// Badge counts unread threads only, or everything in the inbox.
     var badgeUnreadOnly: Bool { didSet { d.set(badgeUnreadOnly, forKey: "badgeUnreadOnly") } }
+    /// How solid the menu-bar popover's background is: 0 is the system's glass, 1 is an opaque window color.
+    var popoverOpacity: Double { didSet { d.set(popoverOpacity, forKey: "popoverOpacity") } }
 
     var launchAtLogin: Bool {
         get { SMAppService.mainApp.status == .enabled }
@@ -55,6 +57,7 @@ final class Preferences {
             "advanceAfterAction": true,
             "undoSeconds": 5.0,
             "badgeUnreadOnly": true,
+            "popoverOpacity": 0.0,
         ])
         groupBy = GroupBy(rawValue: d.string(forKey: "groupBy") ?? "") ?? .date
         markReadOnOpen = d.bool(forKey: "markReadOnOpen")
@@ -65,5 +68,6 @@ final class Preferences {
         advanceAfterAction = d.bool(forKey: "advanceAfterAction")
         undoSeconds = d.double(forKey: "undoSeconds")
         badgeUnreadOnly = d.bool(forKey: "badgeUnreadOnly")
+        popoverOpacity = d.double(forKey: "popoverOpacity")
     }
 }

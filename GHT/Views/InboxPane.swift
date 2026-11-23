@@ -27,29 +27,44 @@ struct InboxPane: View {
     // MARK: Header
 
     private var header: some View {
-        HStack(spacing: 6) {
-            ForEach(InboxStore.Scope.allCases) { scope in
-                ScopeTab(scope: scope, count: store.count(scope), selected: store.scope == scope) {
-                    store.scope = scope
-                }
+        HStack(spacing: 2) {
+            // When the labels don't fit (big counts, a narrow column), Saved, Snoozed and Done drop to icons.
+            ViewThatFits(in: .horizontal) {
+                scopeTabs(iconOnly: false)
+                scopeTabs(iconOnly: true)
             }
             Spacer(minLength: 4)
             Button {
                 Task { await store.refresh(force: true) }
             } label: {
-                Image(systemName: "arrow.clockwise")
-                    .rotationEffect(.degrees(store.isRefreshing ? 360 : 0))
-                    .animation(store.isRefreshing ? .linear(duration: 0.8).repeatForever(autoreverses: false) : .default, value: store.isRefreshing)
+                Label("Refresh", systemImage: "arrow.clockwise")
+                    // The symbol's own rotate effect spins around the arrow's drawn center; rotationEffect
+                    // spun the whole 26×24 label frame, which is off-center and wobbled.
+                    .symbolEffect(.rotate.clockwise, options: .repeating, isActive: store.isRefreshing)
             }
             .help("Refresh (⌘R)")
             .keyboardShortcut("r", modifiers: .command)
             tidyMenu
             moreMenu
         }
+        .labelStyle(ToolbarIconLabelStyle())
         .buttonStyle(.borderless)
-        .padding(.horizontal, 12)
+        .padding(.leading, 12)
+        .padding(.trailing, 8)
         .padding(.top, 12)
-        .padding(.bottom, 8)
+        .padding(.bottom, 10)
+    }
+
+    private func scopeTabs(iconOnly: Bool) -> some View {
+        HStack(spacing: 2) {
+            ForEach(InboxStore.Scope.allCases) { scope in
+                // Done keeps up to 200 threads; a count there is noise, not a to-do.
+                ScopeTab(scope: scope, count: scope == .done ? 0 : store.count(scope), selected: store.scope == scope,
+                         iconOnly: iconOnly && [.saved, .snoozed, .done].contains(scope)) {
+                    store.scope = scope
+                }
+            }
+        }
     }
 
     private var tidyMenu: some View {
@@ -76,7 +91,7 @@ struct InboxPane: View {
                 Button("Mark all as read", systemImage: "envelope.open") { store.markAllRead() }
             }
         } label: {
-            Image(systemName: "wand.and.sparkles")
+            Label("Tidy Up", systemImage: "wand.and.sparkles")
         }
         .menuIndicator(.hidden)
         .fixedSize()
@@ -98,19 +113,23 @@ struct InboxPane: View {
             Divider()
             Button("Quit GitHub Triage", systemImage: "power") { NSApp.terminate(nil) }
         } label: {
-            Image(systemName: "ellipsis.circle")
+            Label("More", systemImage: "ellipsis.circle")
         }
         .menuIndicator(.hidden)
         .fixedSize()
+        .help("View options, shortcuts and settings")
     }
 
     // MARK: Search & filters
 
     private var searchBar: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 7) {
             Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
-            TextField("Filter — repo:, org:, reason:, is:, label:, author:", text: $store.search)
+                .accessibilityHidden(true)
+            TextField("Filter by repo:, org:, reason:, is:, label:, author:", text: $store.search)
+                .font(.system(size: 13))
                 .textFieldStyle(.plain)
                 .focused($searchFocused)
                 .onSubmit { listFocused = true }
@@ -128,7 +147,7 @@ struct InboxPane: View {
                     Button("Save as Filter…") { newFilterName = ""; savingFilter = true }
                     Button("Clear") { store.search = "" }
                 } label: {
-                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                    Label("Clear Filter", systemImage: "xmark.circle.fill").labelStyle(.iconOnly).foregroundStyle(.secondary)
                 } primaryAction: {
                     store.search = ""
                 }
@@ -154,7 +173,7 @@ struct InboxPane: View {
                     Button("Unread") { setTerm("is", "unread") }
                 }
             } label: {
-                Image(systemName: "chevron.down.circle")
+                Label("Filter Options", systemImage: "chevron.down.circle").labelStyle(.iconOnly).foregroundStyle(.secondary)
             }
             .menuIndicator(.hidden)
             .fixedSize()
@@ -162,10 +181,11 @@ struct InboxPane: View {
             .help("Filter by repository, type or state")
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(.quaternary.opacity(0.6), in: RoundedRectangle(cornerRadius: 8))
+        .padding(.vertical, 7)
+        .background(FieldBackground(focused: searchFocused))
+        .animation(.snappy(duration: 0.15), value: searchFocused)
         .padding(.horizontal, 12)
-        .padding(.bottom, 8)
+        .padding(.bottom, 10)
         .background {
             Button("") { searchFocused = true }.keyboardShortcut("f", modifiers: .command).hidden()
         }
@@ -214,8 +234,17 @@ struct InboxPane: View {
                 }
             }
             .padding(.horizontal, 12)
+            .padding(.vertical, 1)
         }
-        .padding(.bottom, 8)
+        // Chips fade out at either edge, so a cut-off one reads as "scroll for more" instead of a clipping bug.
+        .mask {
+            HStack(spacing: 0) {
+                LinearGradient(colors: [.clear, .black], startPoint: .leading, endPoint: .trailing).frame(width: 12)
+                Color.black
+                LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing).frame(width: 28)
+            }
+        }
+        .padding(.bottom, 10)
     }
 
     // MARK: List
@@ -229,6 +258,7 @@ struct InboxPane: View {
                             NotificationRow(store: store, notification: n, isOpen: store.focused == n.id)
                                 .tag(n.id)
                                 .id(n.id)
+                                .listRowBackground(RowHighlight(selected: store.selection.contains(n.id), active: listFocused))
                         }
                     } header: {
                         if !group.title.isEmpty { GroupHeader(store: store, group: group) }
@@ -259,7 +289,7 @@ struct InboxPane: View {
                 return .ignored
             }
             .onKeyPress(.delete) {
-                store.markDone(store.targets)
+                store.toggleDone(store.targets)
                 return .handled
             }
         }
@@ -270,9 +300,11 @@ struct InboxPane: View {
         switch press.characters.lowercased() {
         case "j": store.move(1)
         case "k": store.move(-1)
-        case "e": store.markDone(store.targets)
+        case "e": store.toggleDone(store.targets)
+        // The same keys as the github.com inbox.
         case "i" where shift: store.markRead(store.targets)
-        case "u" where shift: store.unsubscribe(store.targets)
+        case "u" where shift: store.markUnread(store.targets)
+        case "m" where shift: store.unsubscribe(store.targets)
         case "s": store.toggleSaved(store.targets)
         case "z":
             if let tomorrow = InboxStore.snoozeOptions().first(where: { $0.label == "Tomorrow morning" }) {
@@ -306,11 +338,11 @@ struct InboxPane: View {
                 Text(login)
             }
         }
-        .font(.caption)
+        .font(.system(size: 11))
         .foregroundStyle(.secondary)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(.bar)
+        .padding(.horizontal, 14)
+        .frame(height: 30)
+        .overlay(alignment: .top) { Divider() }
     }
 }
 
@@ -320,30 +352,41 @@ private struct ScopeTab: View {
     var scope: InboxStore.Scope
     var count: Int
     var selected: Bool
+    var iconOnly = false
     var action: () -> Void
+    @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 4) {
-                Text(scope.label)
-                    .fontWeight(selected ? .semibold : .regular)
-                    .lineLimit(1)
+            HStack(spacing: 5) {
+                if iconOnly {
+                    Image(systemName: scope.symbol)
+                        .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                } else {
+                    Text(scope.label)
+                        .font(.system(size: 13, weight: selected ? .semibold : .regular))
+                        .lineLimit(1)
+                }
                 if count > 0 {
                     Text("\(count)")
-                        .font(.caption2.monospacedDigit().weight(.semibold))
+                        .font(.system(size: 10.5, weight: .semibold).monospacedDigit())
                         .padding(.horizontal, 5)
                         .padding(.vertical, 1)
-                        .background(selected ? AnyShapeStyle(.tint.opacity(0.25)) : AnyShapeStyle(.quaternary), in: Capsule())
+                        .background(Color.primary.opacity(selected ? 0.12 : 0.07), in: Capsule())
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(selected ? AnyShapeStyle(.tint.opacity(0.12)) : AnyShapeStyle(.clear), in: RoundedRectangle(cornerRadius: 6))
+            .padding(.horizontal, 7)
+            .frame(height: 26)
+            .background(Color.primary.opacity(selected ? 0.09 : hovering ? 0.045 : 0), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .fixedSize()
         .foregroundStyle(selected ? .primary : .secondary)
+        .onHover { hovering = $0 }
+        .help(iconOnly ? scope.label : "")
+        .accessibilityLabel(scope.label)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
 
@@ -352,6 +395,7 @@ private struct FilterChip: View {
     var count: Int?
     var selected: Bool
     var action: () -> Void
+    @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
@@ -361,15 +405,66 @@ private struct FilterChip: View {
                     Text("\(count)").monospacedDigit().foregroundStyle(selected ? .primary : .secondary)
                 }
             }
-            .font(.system(size: 11, weight: selected ? .semibold : .regular))
-            .padding(.horizontal, 9)
-            .padding(.vertical, 3.5)
-            .background(selected ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.quaternary.opacity(0.5)), in: Capsule())
-            .overlay(Capsule().strokeBorder(selected ? AnyShapeStyle(.tint.opacity(0.5)) : AnyShapeStyle(.clear), lineWidth: 0.5))
+            .font(.system(size: 11.5, weight: selected ? .semibold : .regular))
+            .padding(.horizontal, 10)
+            .frame(height: 22)
+            .background(selected ? AnyShapeStyle(.tint.opacity(0.2)) : AnyShapeStyle(Color.primary.opacity(hovering ? 0.1 : 0.06)), in: Capsule())
+            .overlay(Capsule().strokeBorder(selected ? AnyShapeStyle(.tint.opacity(0.55)) : AnyShapeStyle(.clear), lineWidth: 1))
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
+}
+
+/// A tinted, rounded selection instead of the solid accent bar: row text and state colors keep their
+/// own contrast whatever the accent color is. Gray when the list isn't the key focus.
+private struct RowHighlight: View {
+    var selected: Bool
+    var active: Bool
+    @Environment(\.colorScheme) private var scheme
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        let rect = RoundedRectangle(cornerRadius: 8, style: .continuous)
+        ZStack {
+            NativeSelectionOff()
+            if selected {
+                rect
+                    .fill(active ? AnyShapeStyle(.tint.opacity(scheme == .dark ? 0.26 : 0.16)) : AnyShapeStyle(Color.primary.opacity(0.08)))
+                    .overlay {
+                        if contrast == .increased { rect.strokeBorder(active ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary), lineWidth: 1) }
+                    }
+                    .padding(.horizontal, 8)
+            }
+        }
+    }
+}
+
+/// Turns off the table's own solid selection fill so RowHighlight is the only selection drawn.
+/// SwiftUI has no switch for this on macOS, so it reaches the NSTableView behind the List.
+private struct NativeSelectionOff: NSViewRepresentable {
+    final class Probe: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            apply()
+        }
+
+        func apply() {
+            var view = superview
+            while let v = view {
+                if let table = v as? NSTableView {
+                    if table.selectionHighlightStyle != .none { table.selectionHighlightStyle = .none }
+                    return
+                }
+                view = v.superview
+            }
+        }
+    }
+
+    func makeNSView(context: Context) -> Probe { Probe() }
+    func updateNSView(_ view: Probe, context: Context) { view.apply() }
 }
 
 private struct GroupHeader: View {
@@ -378,11 +473,11 @@ private struct GroupHeader: View {
     @State private var hovering = false
 
     var body: some View {
-        HStack {
+        HStack(spacing: 6) {
             Text(group.title)
-            Text("\(group.items.count)").foregroundStyle(.tertiary)
+            Text("\(group.items.count)").monospacedDigit().opacity(0.6)
             Spacer()
-            if hovering {
+            if hovering, store.scope != .done {
                 Button("Done all") { store.markDone(group.items.map(\.id)) }
                     .buttonStyle(.borderless)
                     .font(.caption)
@@ -403,7 +498,7 @@ private struct EmptyInbox: View {
             Image(systemName: store.scope == .inbox && store.activeQuery.isEmpty ? "checkmark.circle" : "line.3.horizontal.decrease.circle")
                 .font(.system(size: 36, weight: .light))
                 .foregroundStyle(store.scope == .inbox && store.activeQuery.isEmpty ? AnyShapeStyle(GHColor.open) : AnyShapeStyle(.tertiary))
-            Text(message).foregroundStyle(.secondary)
+            Text(message).font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
             if !store.activeQuery.isEmpty {
                 Button("Clear filters") {
                     store.search = ""
@@ -422,6 +517,7 @@ private struct EmptyInbox: View {
         case .unread: return "No unread notifications"
         case .saved: return "Nothing saved. Press S to save a thread."
         case .snoozed: return "Nothing snoozed"
+        case .done: return "Nothing marked done yet"
         }
     }
 }
@@ -434,17 +530,25 @@ struct BulkBar: View {
         HStack(spacing: 10) {
             Text("\(store.selection.count) selected").font(.callout.weight(.semibold))
             Spacer()
-            Button("Done", systemImage: "checkmark") { store.markDone(ids) }
-            Button("Read", systemImage: "envelope.open") { store.markRead(ids) }
-            Button("Save", systemImage: "bookmark") { store.toggleSaved(ids) }
-            SnoozeMenu(store: store, ids: ids)
-            Button("Unsubscribe", systemImage: "bell.slash") { store.unsubscribe(ids) }
+            if store.scope == .done {
+                Button("Move to Inbox", systemImage: "tray.and.arrow.up") { store.moveToInbox(ids) }
+                Button("Unsubscribe", systemImage: "bell.slash") { store.unsubscribe(ids) }
+            } else {
+                Button("Done", systemImage: "checkmark") { store.markDone(ids) }
+                Button("Read", systemImage: "envelope.open") { store.markRead(ids) }
+                Button("Unread", systemImage: "envelope.badge") { store.markUnread(ids) }
+                Button("Save", systemImage: "bookmark") { store.toggleSaved(ids) }
+                SnoozeMenu(store: store, ids: ids)
+                Button("Unsubscribe", systemImage: "bell.slash") { store.unsubscribe(ids) }
+            }
         }
-        .labelStyle(.iconOnly)
+        .labelStyle(ToolbarIconLabelStyle())
         .buttonStyle(.borderless)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(.tint.opacity(0.1))
+        .padding(.leading, 14)
+        .padding(.trailing, 8)
+        .padding(.vertical, 6)
+        .background(.tint.opacity(0.12))
+        .overlay(alignment: .top) { Divider() }
     }
 }
 
@@ -478,11 +582,12 @@ private struct ShortcutsSheet: View {
     private let rows: [(String, String)] = [
         ("j / k  or  ↓ / ↑", "Next / previous"),
         ("↩", "Open"),
-        ("e  or  ⌫", "Mark as done (next one opens)"),
+        ("e  or  ⌫", "Mark as done (next one opens). In Done, move back to the inbox"),
         ("⇧ I", "Mark as read"),
+        ("⇧ U", "Mark as unread (in this app only)"),
         ("s", "Save / unsave"),
         ("z", "Snooze until tomorrow morning"),
-        ("⇧ U", "Unsubscribe"),
+        ("⇧ M", "Unsubscribe"),
         ("o", "Open on github.com"),
         ("r", "Reply"),
         ("⌘↩", "Send reply"),

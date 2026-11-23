@@ -38,6 +38,17 @@ private struct GeneralSettings: View {
                     Text("Everything in the inbox").tag(false)
                 }
                 .disabled(!prefs.showCountInMenuBar)
+                LabeledContent("Background") {
+                    Slider(value: $prefs.popoverOpacity, in: 0...1) {
+                        EmptyView()
+                    } minimumValueLabel: {
+                        Text("Clear")
+                    } maximumValueLabel: {
+                        Text("Solid")
+                    }
+                    .frame(maxWidth: 240)
+                }
+                .help("How see-through the inbox dropdown is")
             }
             Section("Triage") {
                 Toggle("Mark as read when opened", isOn: $prefs.markReadOnOpen)

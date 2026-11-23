@@ -13,6 +13,7 @@ enum ConversationHTML {
         case .unsupported:
             html = ""
         }
+        if case .conversation = detail { return page(html, timeline: true) }
         return page(html)
     }
 
@@ -27,7 +28,7 @@ enum ConversationHTML {
         }
         func divider(_ date: Date?, _ author: String?) {
             if !dividerPlaced, isNew(date, author) {
-                out += #"<div class="new-divider" id="ght-new"><span>New since you last read</span></div>"#
+                out += newDivider
                 dividerPlaced = true
             }
         }
@@ -65,6 +66,8 @@ enum ConversationHTML {
         return out
     }
 
+    private static let newDivider = #"<div class="new-divider" id="ght-new"><i></i><span>New since you last read</span><i></i></div>"#
+
     private static func comment(id: String?, anchor: String?, author: GQLActor?, association: String?, date: Date?, verb: String,
                                 bodyHTML: String?, url: String?, reactions: [GQLReactionGroup]?, isNew: Bool, isOpening: Bool,
                                 extraClass: String = "", badge: String = "") -> String {
@@ -82,7 +85,7 @@ enum ConversationHTML {
               <span class="verb">\(verb)</span> \(time) \(assoc)\(badge)
               <span class="actions">
                 <button class="act" data-action="mention" data-login="\(esc(login))" title="Mention @\(esc(login))">@</button>
-                <button class="act" data-action="quote" title="Quote reply (uses your selection if there is one)">❝</button>
+                <button class="act" data-action="quote" title="Quote reply (uses your selection if there is one)">\(icon("quote"))</button>
               </span>
             </div>
             <div class="markdown-body">\(body)</div>
@@ -105,16 +108,16 @@ enum ConversationHTML {
     private static func review(_ item: GQLTimelineNode, isNew: Bool) -> String {
         let login = item.author?.display ?? "ghost"
         let (icon, cls, verb): (String, String, String) = switch item.reviewState {
-        case "APPROVED": ("✓", "approved", "approved these changes")
-        case "CHANGES_REQUESTED": ("±", "changes", "requested changes")
-        case "DISMISSED": ("×", "dismissed", "left a review (dismissed)")
-        default: ("◎", "reviewed", "reviewed")
+        case "APPROVED": ("check", "approved", "approved these changes")
+        case "CHANGES_REQUESTED": ("changes", "changes", "requested changes")
+        case "DISMISSED": ("x", "dismissed", "left a review (dismissed)")
+        default: ("eye", "reviewed", "reviewed")
         }
         let hasBody = !(item.bodyHTML?.isEmpty ?? true)
         let comments = item.comments?.items ?? []
         var out = """
         <div class="event review \(cls)\(isNew ? " is-new" : "")">
-          <span class="event-icon \(cls)">\(icon)</span>
+          <span class="event-icon \(cls)">\(Self.icon(icon))</span>
           <img class="mini-avatar" src="\(esc(avatar(item.author?.avatarUrl, 40)))" alt="">
           <a class="author" href="https://github.com/\(esc(login))">\(esc(login))</a> \(verb)
           \(item.createdAt.map { #"<a class="time" href="\#(esc(item.url ?? ""))" title="\#(esc(full($0)))">\#(relative($0))</a>"# } ?? "")
@@ -138,7 +141,7 @@ enum ConversationHTML {
                   \(hunk)
                   <div class="card-header small"><img class="mini-avatar" src="\(esc(avatar(c.author?.avatarUrl, 40)))" alt="">
                     <span class="author">\(esc(c.author?.display ?? "ghost"))</span> <span class="time">\(relative(c.createdAt))</span>
-                    <span class="actions"><button class="act" data-action="quote" title="Quote reply">❝</button></span></div>
+                    <span class="actions"><button class="act" data-action="quote" title="Quote reply">\(Self.icon("quote"))</button></span></div>
                   <div class="markdown-body">\(c.bodyHTML)</div>
                 </div>
                 """
@@ -151,7 +154,7 @@ enum ConversationHTML {
     private static func eventLine(_ item: GQLTimelineNode) -> String? {
         let actor = item.actor?.display ?? "Someone"
         let text: String
-        var icon = "•"
+        var icon = "dot"
         var cls = ""
         switch item.__typename {
         case "ClosedEvent":
@@ -167,51 +170,51 @@ enum ConversationHTML {
                 else if let oid = c.abbreviatedOid { via = #" in <a href="\#(esc(c.url ?? ""))"><code>\#(esc(oid))</code></a>"# }
             }
             text = "closed this\(reason)\(via)"
-            icon = item.stateReason == "NOT_PLANNED" ? "⊘" : "✓"
+            icon = item.stateReason == "NOT_PLANNED" ? "skip" : "check"
             cls = item.stateReason == "NOT_PLANNED" ? "muted" : "done"
         case "ReopenedEvent":
-            text = "reopened this"; icon = "↺"; cls = "open"
+            text = "reopened this"; icon = "reopen"; cls = "open"
         case "LabeledEvent", "UnlabeledEvent":
             guard let l = item.label else { return nil }
             text = "\(item.__typename == "LabeledEvent" ? "added" : "removed") \(labelHTML(l)) label"
-            icon = "⌗"
+            icon = "tag"
         case "AssignedEvent":
             let who = item.assignee?.display ?? "someone"
             text = who == item.actor?.login ? "self-assigned this" : "assigned <b>\(esc(who))</b>"
-            icon = "☺"
+            icon = "person"
         case "UnassignedEvent":
-            text = "unassigned <b>\(esc(item.assignee?.display ?? "someone"))</b>"; icon = "☺"
+            text = "unassigned <b>\(esc(item.assignee?.display ?? "someone"))</b>"; icon = "person"
         case "RenamedTitleEvent":
-            text = "changed the title <del>\(esc(item.previousTitle ?? ""))</del> <ins>\(esc(item.currentTitle ?? ""))</ins>"; icon = "✎"
+            text = "changed the title <del>\(esc(item.previousTitle ?? ""))</del> <ins>\(esc(item.currentTitle ?? ""))</ins>"; icon = "pencil"
         case "CrossReferencedEvent":
             guard let src = item.source else { return nil }
             let repo = src.repository?.nameWithOwner ?? ""
             let verb = item.willCloseTarget == true ? "linked a pull request that will close this" : "mentioned this in"
             text = #"\#(verb) <a href="\#(esc(src.url ?? ""))">\#(esc(src.title ?? "")) <span class="dim">\#(esc(repo))#\#(src.number ?? 0)</span></a>"#
-            icon = "↗"
+            icon = "link"
         case "ReferencedEvent":
             guard let c = item.commit else { return nil }
             text = #"added a commit that referenced this <a href="\#(esc(c.url ?? ""))"><code>\#(esc(c.abbreviatedOid ?? ""))</code></a>"#
-            icon = "⎇"
+            icon = "commit"
         case "MilestonedEvent":
-            text = "added this to the <b>\(esc(item.milestoneTitle ?? ""))</b> milestone"; icon = "⚑"
+            text = "added this to the <b>\(esc(item.milestoneTitle ?? ""))</b> milestone"; icon = "flag"
         case "MergedEvent":
             text = #"merged commit <a href="\#(esc(item.commit?.url ?? ""))"><code>\#(esc(item.commit?.abbreviatedOid ?? ""))</code></a> into <code>\#(esc(item.mergeRefName ?? ""))</code>"#
-            icon = "⑂"; cls = "done"
+            icon = "merge"; cls = "done"
         case "ReviewRequestedEvent":
-            text = "requested a review from <b>\(esc(item.requestedReviewer?.display ?? "someone"))</b>"; icon = "◉"
+            text = "requested a review from <b>\(esc(item.requestedReviewer?.display ?? "someone"))</b>"; icon = "eye"
         case "HeadRefForcePushedEvent":
-            text = "force-pushed the branch"; icon = "⤴"
+            text = "force-pushed the branch"; icon = "push"
         case "ReadyForReviewEvent":
-            text = "marked this pull request as ready for review"; icon = "◉"; cls = "open"
+            text = "marked this pull request as ready for review"; icon = "eye"; cls = "open"
         case "ConvertToDraftEvent":
-            text = "marked this pull request as draft"; icon = "◌"; cls = "muted"
+            text = "marked this pull request as draft"; icon = "draft"; cls = "muted"
         default:
             return nil
         }
         let time = item.createdAt.map { #"<span class="time" title="\#(esc(full($0)))">\#(relative($0))</span>"# } ?? ""
         return """
-        <div class="event"><span class="event-icon \(cls)">\(icon)</span><img class="mini-avatar" src="\(esc(avatar(item.actor?.avatarUrl, 40)))" alt="">
+        <div class="event"><span class="event-icon \(cls)">\(Self.icon(icon))</span><img class="mini-avatar" src="\(esc(avatar(item.actor?.avatarUrl, 40)))" alt="">
         <a class="author" href="https://github.com/\(esc(actor))">\(esc(actor))</a> \(text) \(time)</div>
         """
     }
@@ -232,7 +235,7 @@ enum ConversationHTML {
         for c in comments {
             let new = lastRead.map { c.createdAt > $0 && c.author?.login != viewer } ?? false
             if new && !dividerPlaced {
-                out += #"<div class="new-divider" id="ght-new"><span>New since you last read</span></div>"#
+                out += newDivider
                 dividerPlaced = true
             }
             let answer = c.isAnswer == true ? #"<span class="badge answer">✓ Answer</span>"# : ""
@@ -280,7 +283,33 @@ enum ConversationHTML {
             let emoji = GQLReactionGroup(content: c, viewerHasReacted: false, reactors: GQLCount(totalCount: 0)).emoji
             return #"<button class="reaction pick" data-subject="\#(esc(subjectID))" data-content="\#(c)" data-mine="\#(mine.contains(c))">\#(emoji)</button>"#
         }.joined()
-        return #"<div class="reactions">\#(buttons)<span class="add-reaction"><button class="reaction add" title="Add reaction">☺︎+</button><span class="picker">\#(picker)</span></span></div>"#
+        return #"<div class="reactions\#(present.isEmpty ? " empty" : "")">\#(buttons)<span class="add-reaction"><button class="reaction add" title="Add reaction">\#(icon("smiley"))</button><span class="picker">\#(picker)</span></span></div>"#
+    }
+
+    /// Small line icons for the timeline, drawn inline so the page needs no outside resources.
+    private static let iconPaths: [String: String] = [
+        "check": #"<path d="M3.5 8.5l3 3 6-7"/>"#,
+        "x": #"<path d="M4 4l8 8M12 4l-8 8"/>"#,
+        "dot": #"<circle cx="8" cy="8" r="2" fill="currentColor"/>"#,
+        "skip": #"<circle cx="8" cy="8" r="5.5"/><path d="M4.2 11.8l7.6-7.6"/>"#,
+        "reopen": #"<circle cx="8" cy="8" r="5.5"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/>"#,
+        "tag": #"<path d="M2.5 2.5h5l6 6-5 5-6-6z"/><circle cx="5.6" cy="5.6" r=".6" fill="currentColor"/>"#,
+        "person": #"<circle cx="8" cy="5.5" r="2.5"/><path d="M3 13.5c0-2.8 2.2-4.5 5-4.5s5 1.7 5 4.5"/>"#,
+        "pencil": #"<path d="M3 13l1-3.5 7-7 2.5 2.5-7 7z"/>"#,
+        "link": #"<path d="M5 11l6-6M6 5h5v5"/>"#,
+        "commit": #"<circle cx="8" cy="8" r="2.75"/><path d="M1.5 8h3.75M10.75 8h3.75"/>"#,
+        "flag": #"<path d="M4 14V2.5M4 3h8l-2 3 2 3H4"/>"#,
+        "merge": #"<circle cx="4.5" cy="3.5" r="1.5"/><circle cx="4.5" cy="12.5" r="1.5"/><circle cx="11.5" cy="8" r="1.5"/><path d="M4.5 5v6M4.5 5c0 3 3 3 5.5 3"/>"#,
+        "eye": #"<path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>"#,
+        "push": #"<path d="M8 13V4M4.5 7.5L8 4l3.5 3.5"/>"#,
+        "draft": #"<circle cx="8" cy="8" r="5.5" stroke-dasharray="2.2 2.2"/>"#,
+        "changes": #"<path d="M8 3v6M5 6h6M5 12.5h6"/>"#,
+        "quote": #"<path d="M3 11.5V8.2C3 6 4.2 4.6 6.3 4.3M9 11.5V8.2c0-2.2 1.2-3.6 3.3-3.9M3 8.5h3v3H3zM9 8.5h3v3H9z"/>"#,
+        "smiley": #"<circle cx="8" cy="8" r="6"/><path d="M5.5 9.5c.6 1 1.5 1.5 2.5 1.5s1.9-.5 2.5-1.5"/><circle cx="6" cy="6.5" r=".7" fill="currentColor"/><circle cx="10" cy="6.5" r=".7" fill="currentColor"/>"#,
+    ]
+
+    private static func icon(_ name: String) -> String {
+        #"<svg class="ic" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">\#(iconPaths[name] ?? iconPaths["dot"]!)</svg>"#
     }
 
     private static func labelHTML(_ l: GQLLabel) -> String {
@@ -325,12 +354,12 @@ enum ConversationHTML {
 
     // MARK: Page
 
-    private static func page(_ body: String) -> String {
+    private static func page(_ body: String, timeline: Bool = false) -> String {
         """
         <!doctype html><html><head><meta charset="utf-8">
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data:; media-src https:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
         <style>\(css)</style></head>
-        <body><main>\(body)</main><script>\(script)</script></body></html>
+        <body><main\(timeline ? #" class="timeline""# : "")>\(body)</main><script>\(script)</script></body></html>
         """
     }
 
@@ -365,43 +394,65 @@ enum ConversationHTML {
     };
     """
 
+    /// Colors are translucent on purpose: the page has no background of its own, so cards and code blocks
+    /// tint whatever the popover or window material is showing, the way native controls do.
     static let css = """
     :root {
       color-scheme: light dark;
-      --fg: #1f2328; --muted: #59636e; --border: #d1d9e0; --card: #ffffff; --header: #f6f8fa; --bg: transparent;
-      --accent: #0969da; --open: #1a7f37; --done: #8250df; --closed: #cf222e; --code: rgba(129,139,152,0.12);
-      --new: #0969da; --hl: rgba(84,174,255,0.08); --mark: #fff8c5;
+      --fg: #1d1d1f; --muted: rgba(60,60,67,0.74); --border: rgba(0,0,0,0.11); --card: rgba(255,255,255,0.55); --header: rgba(0,0,0,0.035);
+      --line: rgba(0,0,0,0.13); --node: #e6e8eb; --node-fg: #59636e;
+      --accent: #0969da; --open: #1a7f37; --done: #8250df; --closed: #cf222e; --attention: #9a6700; --code: rgba(0,0,0,0.055);
+      --new: #0969da; --mark: #fff8c5;
     }
     @media (prefers-color-scheme: dark) {
-      :root { --fg: #f0f6fc; --muted: #9198a1; --border: #3d444d; --card: #0d1117; --header: #151b23;
-        --accent: #4493f8; --open: #3fb950; --done: #a371f7; --closed: #f85149; --code: rgba(101,108,118,0.2);
-        --new: #4493f8; --hl: rgba(56,139,253,0.08); --mark: rgba(187,128,9,0.4); }
+      :root { --fg: #f2f3f5; --muted: rgba(235,235,245,0.62); --border: rgba(255,255,255,0.10); --card: rgba(255,255,255,0.04); --header: rgba(255,255,255,0.045);
+        --line: rgba(255,255,255,0.14); --node: #3a3e45; --node-fg: #c3c8cf;
+        --accent: #4f9bff; --open: #3fb950; --done: #a371f7; --closed: #f85149; --attention: #d29922; --code: rgba(255,255,255,0.08);
+        --new: #4f9bff; --mark: rgba(187,128,9,0.4); }
+    }
+    @media (prefers-contrast: more) {
+      :root { --muted: rgba(0,0,0,0.85); --border: rgba(0,0,0,0.45); --line: rgba(0,0,0,0.45); --node-fg: #1d1d1f; }
+    }
+    @media (prefers-contrast: more) and (prefers-color-scheme: dark) {
+      :root { --muted: rgba(255,255,255,0.88); --border: rgba(255,255,255,0.5); --line: rgba(255,255,255,0.5); --node-fg: #ffffff; }
     }
     * { box-sizing: border-box; }
-    html, body { margin: 0; background: var(--bg); color: var(--fg); }
+    html, body { margin: 0; background: transparent; color: var(--fg); }
     body { font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
-    main { padding: 16px 18px 40px; max-width: 900px; }
+    main { padding: 16px 18px 28px; max-width: 900px; }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
-    .item { display: flex; gap: 10px; margin: 0 0 14px; }
-    .avatar { width: 32px; height: 32px; border-radius: 50%; flex: none; margin-top: 2px; background: var(--code); }
-    .card { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--card); overflow: hidden; }
+    svg.ic { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; display: block; }
+
+    /* One unbroken timeline line: every block draws its own stretch down to the next block, behind the
+       avatars and event icons, which are opaque so the line seems to pass through them. */
+    .timeline > * { position: relative; margin: 0 0 14px; }
+    .timeline > *::before { content: ''; position: absolute; left: calc(15px - var(--inset, 0px)); top: 0; bottom: -14px; width: 2px;
+      border-radius: 1px; background: var(--line); z-index: -1; }
+    .timeline > .opening::before { top: 16px; }
+    .timeline > :last-child::before, .timeline > .category::before { display: none; }
+    .timeline > :last-child { margin-bottom: 0; }
+
+    .item { display: flex; gap: 10px; }
+    .avatar { width: 32px; height: 32px; border-radius: 50%; flex: none; background: var(--node); }
+    .card { position: relative; flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--card); overflow: hidden; }
     .card-header { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; padding: 7px 12px; background: var(--header);
       border-bottom: 1px solid var(--border); color: var(--muted); font-size: 13px; }
-    .card-header.small { border-top: 1px solid var(--border); padding: 5px 12px; }
-    .opening .card-header { background: color-mix(in srgb, var(--accent) 7%, var(--header)); }
-    .is-new .card { border-color: color-mix(in srgb, var(--new) 60%, var(--border)); box-shadow: 0 0 0 1px color-mix(in srgb, var(--new) 30%, transparent); }
+    .card-header.small { border-top: 1px solid var(--border); padding: 5px 12px; align-items: center; }
+    .is-new .card { border-color: color-mix(in srgb, var(--new) 55%, transparent); }
+    .is-new .card-header { background: color-mix(in srgb, var(--new) 10%, transparent); }
     .author { color: var(--fg); font-weight: 600; }
     .time { color: var(--muted); }
     .badge { border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; font-size: 11px; font-weight: 500; color: var(--muted); }
     .badge.answer { color: var(--open); border-color: var(--open); }
-    .badge.pre { color: #9a6700; border-color: #d4a72c; vertical-align: middle; }
+    .badge.pre { color: var(--attention); border-color: var(--attention); vertical-align: middle; }
     .answer .card { border-color: var(--open); }
-    .actions { margin-left: auto; display: flex; gap: 2px; opacity: 0; transition: opacity .12s; }
-    .card:hover .actions { opacity: 1; }
-    .act { border: 0; background: transparent; color: var(--muted); font-size: 14px; cursor: pointer; padding: 0 6px; border-radius: 4px; }
+    .actions { margin-left: auto; align-self: center; display: flex; gap: 2px; opacity: 0; transition: opacity .12s; }
+    .card:hover .actions, .actions:focus-within { opacity: 1; }
+    .act { border: 0; background: transparent; color: var(--muted); font: 600 13px/1 -apple-system, sans-serif; cursor: pointer; height: 20px; min-width: 24px;
+      padding: 0 5px; border-radius: 5px; display: grid; place-items: center; }
     .act:hover { background: var(--code); color: var(--fg); }
-    .markdown-body { padding: 10px 14px; overflow-wrap: anywhere; }
+    .markdown-body { padding: 12px 14px; overflow-wrap: anywhere; }
     .markdown-body > :first-child { margin-top: 0 !important; }
     .markdown-body > :last-child { margin-bottom: 0 !important; }
     .markdown-body p, .markdown-body ul, .markdown-body ol, .markdown-body blockquote, .markdown-body pre, .markdown-body table, .markdown-body details { margin: 0 0 12px; }
@@ -410,14 +461,14 @@ enum ConversationHTML {
     .markdown-body ul, .markdown-body ol { padding-left: 2em; }
     .markdown-body li + li { margin-top: .2em; }
     .markdown-body blockquote { padding: 0 1em; color: var(--muted); border-left: .25em solid var(--border); }
-    .markdown-body code, .markdown-body tt { font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: .2em .4em; border-radius: 6px; }
-    .markdown-body pre { background: var(--code); padding: 12px 14px; border-radius: 6px; overflow: auto; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .markdown-body code, .markdown-body tt { font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--code); padding: .2em .4em; border-radius: 5px; }
+    .markdown-body pre { background: var(--code); padding: 12px 14px; border-radius: 7px; overflow: auto; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
     .markdown-body pre code { background: transparent; padding: 0; font-size: 100%; white-space: pre; }
     .markdown-body .highlight { margin-bottom: 12px; } .markdown-body .highlight pre { margin: 0; }
     .markdown-body img { max-width: 100%; height: auto; border-radius: 4px; }
     .markdown-body table { border-collapse: collapse; display: block; overflow: auto; }
     .markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 5px 12px; }
-    .markdown-body tr:nth-child(2n) { background: var(--code); }
+    .markdown-body tr:nth-child(2n) { background: var(--header); }
     .markdown-body hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
     .markdown-body .task-list-item { list-style: none; } .markdown-body .task-list-item input { margin: 0 .3em 0 -1.4em; }
     .markdown-body .contains-task-list { padding-left: 1.6em; }
@@ -425,57 +476,63 @@ enum ConversationHTML {
     .markdown-body .user-mention, .markdown-body .team-mention { font-weight: 600; color: var(--fg); }
     .markdown-body .email-hidden-toggle, .markdown-body .email-hidden-reply { display: none; }
     .markdown-body .markdown-alert { padding: 4px 14px; border-left: .25em solid var(--border); margin-bottom: 12px; }
-    .markdown-body .markdown-alert-note { border-color: var(--accent); } .markdown-body .markdown-alert-warning { border-color: #9a6700; }
+    .markdown-body .markdown-alert-note { border-color: var(--accent); } .markdown-body .markdown-alert-warning { border-color: var(--attention); }
     .markdown-body .markdown-alert-important { border-color: var(--done); } .markdown-body .markdown-alert-caution { border-color: var(--closed); }
     .markdown-body .markdown-alert-tip { border-color: var(--open); }
     .markdown-body .markdown-alert-title { font-weight: 600; display: flex; gap: 6px; align-items: center; }
     .markdown-body .markdown-alert-title svg { fill: currentColor; }
     .markdown-body svg.octicon { fill: currentColor; vertical-align: text-bottom; }
     .markdown-body .anchor { display: none; }
-    .markdown-body mark { background: var(--mark); }
+    .markdown-body mark { background: var(--mark); color: inherit; }
     .empty { color: var(--muted); font-style: italic; }
-    .event { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 12px 18px; padding-left: 26px; position: relative;
-      color: var(--muted); font-size: 13px; }
-    .event::before { content: ''; position: absolute; left: -2px; top: -12px; bottom: -12px; border-left: 2px solid var(--border); z-index: -1; }
-    .event-icon { position: absolute; left: -13px; width: 24px; height: 24px; border-radius: 50%; background: var(--header);
-      border: 1px solid var(--border); display: grid; place-items: center; font-size: 12px; color: var(--muted); }
-    .event-icon.done { background: var(--done); color: #fff; border-color: var(--done); }
-    .event-icon.open, .event-icon.approved { background: var(--open); color: #fff; border-color: var(--open); }
-    .event-icon.changes { background: var(--closed); color: #fff; border-color: var(--closed); }
+
+    .event { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-height: 24px; padding-left: 42px; color: var(--muted); font-size: 13px; }
+    .event-icon { position: absolute; left: 4px; top: 0; width: 24px; height: 24px; border-radius: 50%; background: var(--node);
+      display: grid; place-items: center; color: var(--node-fg); }
+    .event-icon.done { background: var(--done); color: #fff; }
+    .event-icon.open, .event-icon.approved { background: var(--open); color: #fff; }
+    .event-icon.changes { background: var(--closed); color: #fff; }
     .event .author { font-weight: 600; }
     .event del { color: var(--muted); } .event ins { text-decoration: none; font-weight: 600; color: var(--fg); }
-    .event code { font: 12px ui-monospace, Menlo, monospace; background: var(--code); padding: 1px 4px; border-radius: 4px; }
+    .event code { font: 12px ui-monospace, Menlo, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
     .event.is-new .author::after { content: ' •'; color: var(--new); }
-    .mini-avatar { width: 20px; height: 20px; border-radius: 50%; vertical-align: middle; }
+    .mini-avatar { width: 20px; height: 20px; border-radius: 50%; vertical-align: middle; background: var(--node); }
     .dim { color: var(--muted); font-weight: normal; }
     .label { --label: #888; display: inline-block; padding: 0 7px; border-radius: 999px; font-size: 12px; font-weight: 500; color: var(--fg);
       background: color-mix(in srgb, var(--label) 22%, transparent); border: 1px solid color-mix(in srgb, var(--label) 55%, transparent); }
-    .review-body { margin: -4px 0 14px 42px; display: flex; flex-direction: column; gap: 8px; }
+    .review-body { --inset: 42px; margin-top: -4px !important; margin-left: 42px !important; display: flex; flex-direction: column; gap: 8px; }
     .review-comment .path { padding: 6px 12px; font: 12px ui-monospace, Menlo, monospace; background: var(--header); border-bottom: 1px solid var(--border); }
     .diff { font: 12px/1.5 ui-monospace, Menlo, monospace; white-space: pre; overflow-x: auto; border-bottom: 1px solid var(--border); }
     .diff div { padding: 0 12px; } .diff .add { background: rgba(46,160,67,.15); } .diff .del { background: rgba(248,81,73,.15); }
     .diff .hunk { color: var(--muted); background: var(--code); }
-    .minimized { margin: 0 0 14px 42px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--muted); }
+    .minimized { --inset: 43px; margin-left: 42px !important; border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; color: var(--muted); font-size: 13px; }
     .minimized summary { cursor: pointer; }
-    .hidden-items { text-align: center; margin: 0 0 14px 42px; padding: 6px; border: 1px dashed var(--border); border-radius: 8px; font-size: 13px; }
-    .new-divider { display: flex; align-items: center; gap: 10px; margin: 6px 0 16px; color: var(--new); font-size: 12px; font-weight: 600; }
-    .new-divider::before, .new-divider::after { content: ''; flex: 1; border-top: 1px solid var(--new); opacity: .6; }
-    .reactions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 10px; align-items: center; }
-    .reaction { border: 1px solid var(--border); background: transparent; color: var(--fg); border-radius: 999px; padding: 1px 8px; font-size: 12px; cursor: pointer; }
+    .minimized .markdown-body { padding: 10px 0 2px; color: var(--fg); font-size: 14px; }
+    .hidden-items { --inset: 43px; text-align: center; margin-left: 42px !important; padding: 6px; border: 1px dashed var(--border); border-radius: 10px; font-size: 13px; }
+    .new-divider { display: flex; align-items: center; gap: 10px; padding-left: 42px; color: var(--new); font-size: 12px; font-weight: 600; }
+    .new-divider i { flex: 1; border-top: 1px solid var(--new); opacity: .5; }
+    .reactions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 14px 12px; align-items: center; }
+    .reactions.empty { position: absolute; right: 8px; bottom: 8px; padding: 0; }
+    .reaction { border: 1px solid var(--border); background: transparent; color: var(--fg); border-radius: 999px; padding: 1px 8px; font-size: 12px; line-height: 20px;
+      cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
     .reaction span { color: var(--muted); }
-    .reaction.mine { background: color-mix(in srgb, var(--accent) 14%, transparent); border-color: var(--accent); }
+    .reaction.mine { background: color-mix(in srgb, var(--accent) 16%, transparent); border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
     .reaction.mine span { color: var(--accent); }
     .reaction:hover { background: var(--code); }
-    .add-reaction { position: relative; display: inline-flex; gap: 2px; }
-    .reaction.add { opacity: 0; color: var(--muted); }
-    .card:hover .reaction.add, .add-reaction.open .reaction.add { opacity: 1; }
-    .picker { display: none; gap: 2px; margin-left: 4px; }
+    .add-reaction { position: relative; display: inline-flex; align-items: center; gap: 2px; }
+    .reactions.empty .add-reaction { flex-direction: row-reverse; }
+    .reactions.empty .add-reaction.open { background: var(--node); border-radius: 999px; padding-left: 4px; }
+    .reaction.add { opacity: 0; color: var(--muted); padding: 0 6px; height: 24px; }
+    .card:hover .reaction.add, .add-reaction.open .reaction.add, .reaction.add:focus-visible { opacity: 1; }
+    .picker { display: none; gap: 2px; margin: 0 4px; }
     .add-reaction.open .picker { display: inline-flex; }
     .reaction.pick { border-color: transparent; font-size: 15px; padding: 0 4px; }
-    .replies { margin: -6px 0 14px 42px; padding-left: 12px; border-left: 2px solid var(--border); }
+    .replies { --inset: 44px; margin-top: -6px !important; margin-left: 42px !important; padding-left: 12px; border-left: 2px solid var(--line); }
+    .replies .item { margin: 0 0 10px; } .replies .item:last-child { margin-bottom: 0; }
     .replies .avatar { width: 24px; height: 24px; }
-    .category { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+    .category { color: var(--muted); font-size: 13px; margin-bottom: 10px !important; }
     .category .emoji, .category g-emoji { font-style: normal; }
     .release-title { margin: 0 0 12px; font-size: 20px; }
+    main:not(.timeline) > .item { margin-bottom: 14px; }
     """
 }

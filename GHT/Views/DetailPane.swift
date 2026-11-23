@@ -40,28 +40,36 @@ struct DetailPane: View {
         let glyph = SubjectGlyph(kind: n.kind, state: state)
         return VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Image(systemName: glyph.symbol)
-                    .foregroundStyle(glyph.color)
-                    .font(.system(size: 16, weight: .semibold))
                 (Text(subject?.title ?? n.subject.title).font(.system(size: 17, weight: .semibold))
-                    + Text(verbatim: n.number.map { "  #\($0)" } ?? "").font(.system(size: 17)).foregroundStyle(.secondary))
+                    + Text(verbatim: n.number.map { "  #\($0)" } ?? "").font(.system(size: 17, weight: .regular)).foregroundStyle(.secondary))
                     .textSelection(.enabled)
                     .lineLimit(3)
-                Spacer()
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 8)
                 Button {
                     store.closeDetail()
                 } label: {
                     Image(systemName: "xmark")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 22, height: 22)
+                        .background(Color.primary.opacity(0.08), in: Circle())
+                        .contentShape(Circle())
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.plain)
                 .help("Close (esc)")
+                .accessibilityLabel("Close conversation")
             }
             HStack(spacing: 8) {
-                StatePill(kind: n.kind, state: state)
+                if state.label.isEmpty {
+                    Image(systemName: glyph.symbol).foregroundStyle(glyph.color).font(.system(size: 12, weight: .semibold))
+                } else {
+                    StatePill(kind: n.kind, state: state)
+                }
                 metaLine
                 Spacer(minLength: 0)
             }
-            .font(.callout)
+            .font(.system(size: 12))
             .foregroundStyle(.secondary)
             if let s = subject, !(s.labels?.items.isEmpty ?? true) || !(s.assignees?.items.isEmpty ?? true) || s.milestone != nil {
                 HStack(spacing: 5) {
@@ -77,12 +85,14 @@ struct DetailPane: View {
             }
             if let s = subject, s.__typename == "PullRequest" { PRSummary(subject: s) }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.leading, 18)
+        .padding(.trailing, 14)
+        .padding(.top, 14)
+        .padding(.bottom, 12)
     }
 
     @ViewBuilder private var metaLine: some View {
-        let repo = Text(n.repository.fullName).fontWeight(.medium)
+        let repo = Text(n.repository.fullName).fontWeight(.medium).foregroundStyle(.primary)
         if let s = subject, let author = s.author?.display, let created = s.createdAt {
             let comments = s.__typename == "Discussion" ? (s.comments?.totalCount ?? 0) : (store.info[n.id]?.commentCount ?? 0)
             Text("\(repo) · \(Text(author).fontWeight(.medium)) opened \(created.formatted(.relative(presentation: .named))) · \(comments) comment\(comments == 1 ? "" : "s")")
@@ -97,17 +107,30 @@ struct DetailPane: View {
     // MARK: Toolbar
 
     private var toolbar: some View {
-        HStack(spacing: 4) {
-            Button("Done", systemImage: "checkmark") { store.markDone([n.id]) }
-                .help("Mark as done (e)")
-            Button(store.local.saved.contains(n.id) ? "Saved" : "Save",
-                   systemImage: store.local.saved.contains(n.id) ? "bookmark.fill" : "bookmark") { store.toggleSaved([n.id]) }
-                .help("Save (s)")
-            SnoozeMenu(store: store, ids: [n.id])
+        HStack(spacing: 2) {
+            if store.isDone(n.id) {
+                // Read state, Save and Snooze belong to inbox threads.
+                Button("Move to Inbox", systemImage: "tray.and.arrow.up") { store.moveToInbox([n.id]) }
+                    .help("Move back to the inbox in this app (e). GitHub's API can't do this, so github.com still shows it as done.")
+            } else {
+                Button("Done", systemImage: "checkmark") { store.markDone([n.id]) }
+                    .help("Mark as done (e)")
+                if n.unread {
+                    Button("Mark as read", systemImage: "envelope.open") { store.markRead([n.id]) }
+                        .help("Mark as read (⇧I)")
+                } else {
+                    Button("Mark as unread", systemImage: "envelope.badge") { store.markUnread([n.id]) }
+                        .help("Mark as unread in this app (⇧U). GitHub's API can't mark threads unread, so github.com still shows it as read.")
+                }
+                Button(store.local.saved.contains(n.id) ? "Saved" : "Save",
+                       systemImage: store.local.saved.contains(n.id) ? "bookmark.fill" : "bookmark") { store.toggleSaved([n.id]) }
+                    .help("Save (s)")
+                SnoozeMenu(store: store, ids: [n.id])
+            }
             Button("Unsubscribe", systemImage: "bell.slash") { store.unsubscribe([n.id]) }
-                .help("Unsubscribe and mark done (⇧U)")
+                .help("Unsubscribe and mark done (⇧M)")
             if let s = subject {
-                Divider().frame(height: 16).padding(.horizontal, 4)
+                Divider().frame(height: 14).padding(.horizontal, 6)
                 StateMenu(store: store, id: n.id, subject: s)
                 if s.__typename != "Discussion", s.viewerCanUpdate == true {
                     LabelMenu(store: store, notification: n, subject: s)
@@ -120,19 +143,20 @@ struct DetailPane: View {
             Spacer()
             if store.busy.contains(n.id) || store.detailLoading.contains(n.id) { ProgressView().controlSize(.small) }
             Button("Reload", systemImage: "arrow.clockwise") { Task { await store.loadDetail(n.id, force: true) } }
+                .help("Reload the conversation")
             Button("Copy Link", systemImage: "link") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(store.webURL(n).absoluteStringWithoutQuery, forType: .string)
                 store.toast = Toast(message: "Link copied")
             }
+            .help("Copy link")
             Button("Open on GitHub", systemImage: "arrow.up.forward.square") { NSWorkspace.shared.open(store.webURL(n)) }
                 .help("Open on github.com (o)")
         }
-        .labelStyle(.iconOnly)
+        .labelStyle(ToolbarIconLabelStyle())
         .buttonStyle(.borderless)
-        .imageScale(.large)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
     }
 
     // MARK: Body
@@ -140,8 +164,9 @@ struct DetailPane: View {
     @ViewBuilder private var content: some View {
         if let error = store.detailErrors[n.id] {
             VStack(spacing: 10) {
-                Image(systemName: "exclamationmark.triangle").font(.largeTitle).foregroundStyle(GHColor.attention)
-                Text(error).multilineTextAlignment(.center).foregroundStyle(.secondary)
+                Image(systemName: "exclamationmark.triangle").font(.system(size: 34, weight: .light)).foregroundStyle(GHColor.attention)
+                Text("Couldn't load this conversation").font(.system(size: 15, weight: .semibold))
+                Text(error).multilineTextAlignment(.center).foregroundStyle(.secondary).frame(maxWidth: 380)
                 HStack {
                     Button("Try Again") { Task { await store.loadDetail(n.id, force: true) } }
                     Button("Open on GitHub") { NSWorkspace.shared.open(store.webURL(n)) }
@@ -162,7 +187,7 @@ struct DetailPane: View {
                 }
             }
         } else {
-            ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
+            ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 
@@ -348,7 +373,11 @@ private struct UnsupportedView: View {
                     store.markRead([notification.id])
                 }
                 .buttonStyle(.borderedProminent)
-                Button("Mark as Done") { store.markDone([notification.id]) }
+                if store.isDone(notification.id) {
+                    Button("Move to Inbox") { store.moveToInbox([notification.id]) }
+                } else {
+                    Button("Mark as Done") { store.markDone([notification.id]) }
+                }
             }
         }
         .padding()

@@ -22,6 +22,12 @@ struct LocalState: Codable {
 
     var saved: Set<String> = []
     var snoozed: [String: Snooze] = [:]
+    /// Threads marked unread in the app. GitHub's API can't mark a thread unread, so this only lives here:
+    /// github.com still shows them as read. Opening or reading the thread clears it.
+    var markedUnread: Set<String> = []
+    /// Done threads moved back to the inbox in the app. GitHub's API has no "move to inbox", so on
+    /// github.com they stay done. New activity puts a thread back in GitHub's inbox, which ends this.
+    var restored: Set<String> = []
     var filters: [SavedFilter] = [
         SavedFilter(name: "Needs me", query: "reason:mention,assign,review_requested,team_mention is:open"),
         SavedFilter(name: "Finished", query: "is:closed,merged"),
@@ -32,6 +38,21 @@ struct LocalState: Codable {
         Snippet(name: "Need more info", body: "Thanks! Could you share the Grav version, PHP version, and the steps to reproduce this?"),
         Snippet(name: "Can't reproduce", body: "I can't reproduce this on the latest release. If it still happens for you, please reopen with the steps and your environment details."),
     ]
+
+    init() {}
+
+    /// Every key is optional, so a state.json from an older build (missing newer keys) still loads
+    /// instead of being replaced by defaults.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let d = LocalState()
+        saved = try c.decodeIfPresent(Set<String>.self, forKey: .saved) ?? d.saved
+        snoozed = try c.decodeIfPresent([String: Snooze].self, forKey: .snoozed) ?? d.snoozed
+        markedUnread = try c.decodeIfPresent(Set<String>.self, forKey: .markedUnread) ?? d.markedUnread
+        restored = try c.decodeIfPresent(Set<String>.self, forKey: .restored) ?? d.restored
+        filters = try c.decodeIfPresent([SavedFilter].self, forKey: .filters) ?? d.filters
+        snippets = try c.decodeIfPresent([Snippet].self, forKey: .snippets) ?? d.snippets
+    }
 
     static var url: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

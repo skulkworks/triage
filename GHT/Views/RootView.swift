@@ -52,16 +52,38 @@ private struct EmptyDetail: View {
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: "tray")
-                .font(.system(size: 40, weight: .light))
+                .font(.system(size: 38, weight: .light))
                 .foregroundStyle(.tertiary)
+                .padding(.bottom, 2)
             Text(store.visible.isEmpty ? "Nothing to triage" : "Select a notification")
-                .font(.title3)
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(.secondary)
-            Text("j / k to move · e to mark done · ? for shortcuts")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
+            HStack(spacing: 14) {
+                KeyHint(keys: "J  K", text: "move")
+                KeyHint(keys: "E", text: store.scope == .done ? "move to inbox" : "done")
+                KeyHint(keys: "?", text: "shortcuts")
+            }
+            .padding(.top, 2)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct KeyHint: View {
+    var keys: String
+    var text: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Text(keys)
+                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .padding(.horizontal, 5)
+                .padding(.vertical, 2)
+                .background(Color.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+            Text(text).font(.system(size: 11))
+        }
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .combine)
     }
 }
 

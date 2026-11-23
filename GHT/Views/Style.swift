@@ -70,6 +70,39 @@ struct SubjectGlyph {
     }
 }
 
+/// Icon-only toolbar items: one size, one weight and the same hit area for buttons and menus alike.
+/// The title stays in the label, so VoiceOver still reads it.
+struct ToolbarIconLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        Label {
+            configuration.title
+        } icon: {
+            configuration.icon
+                .font(.system(size: 14, weight: .medium))
+                .frame(width: 26, height: 24)
+                .contentShape(Rectangle())
+        }
+        .labelStyle(.iconOnly)
+    }
+}
+
+/// The quiet fill behind text inputs (filter field, reply box): a tint of the material, not an opaque well.
+struct FieldBackground: View {
+    var focused = false
+    var radius: CGFloat = 8
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        let rect = RoundedRectangle(cornerRadius: radius, style: .continuous)
+        rect
+            .fill(Color.primary.opacity(focused ? 0.04 : 0.06))
+            .overlay {
+                rect.strokeBorder(focused ? AnyShapeStyle(.tint) : AnyShapeStyle(Color.primary.opacity(contrast == .increased ? 0.5 : 0.1)),
+                                   lineWidth: focused ? 1.5 : 1)
+            }
+    }
+}
+
 struct LabelChip: View {
     var name: String
     var color: String
@@ -77,12 +110,12 @@ struct LabelChip: View {
     var body: some View {
         let c = Color(hexString: color)
         Text(name)
-            .font(.system(size: 10, weight: .medium))
+            .font(.system(size: 10.5, weight: .medium))
             .lineLimit(1)
             .padding(.horizontal, 6)
             .padding(.vertical, 1.5)
-            .background(c.opacity(0.18), in: Capsule())
-            .overlay(Capsule().strokeBorder(c.opacity(0.55), lineWidth: 0.5))
+            .background(c.opacity(0.2), in: Capsule())
+            .overlay(Capsule().strokeBorder(c.opacity(0.6), lineWidth: 0.5))
             .foregroundStyle(.primary)
     }
 }
@@ -98,8 +131,9 @@ struct StatePill: View {
                 .font(.system(size: 11, weight: .semibold))
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(glyph.color, in: Capsule())
-                .foregroundStyle(.white)
+                .background(glyph.color.opacity(0.18), in: Capsule())
+                .overlay(Capsule().strokeBorder(glyph.color.opacity(0.45), lineWidth: 0.5))
+                .foregroundStyle(glyph.color)
         }
     }
 }

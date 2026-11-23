@@ -15,12 +15,16 @@ struct ConversationWebView: NSViewRepresentable {
     var anchors: [String]
     var onMessage: (WebMessage) -> Void
 
+    /// One in-memory store for every conversation, so avatars and images download once per session
+    /// instead of once per thread. Nothing is written to disk.
+    private static let dataStore = WKWebsiteDataStore.nonPersistent()
+
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.userContentController.add(context.coordinator, name: "ght")
-        config.websiteDataStore = .nonPersistent()
+        config.websiteDataStore = Self.dataStore
         let web = WKWebView(frame: .zero, configuration: config)
         web.navigationDelegate = context.coordinator
         web.setValue(false, forKey: "drawsBackground")

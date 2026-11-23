@@ -13,6 +13,7 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     private var window: NSWindow?
     private var settingsWindow: NSWindow?
     private var hotKey: HotKey?
+    private let popoverBacking = PopoverBacking()
 
     static let compactSize = NSSize(width: 440, height: 680)
     static let expandedSize = NSSize(width: 1120, height: 720)
@@ -25,6 +26,7 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         observeBadge()
         observeFocus()
         observeHotKey()
+        observeOpacity()
     }
 
     // MARK: Status item
@@ -148,6 +150,7 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         NSApp.activate()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
+        installBacking()
         Task { await store.refresh() }
     }
 
@@ -174,6 +177,32 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     func popoverDidClose(_ notification: Notification) {
         // Keep selection; drop the detail so the next open starts compact.
         if window?.isVisible != true { store.closeDetail() }
+    }
+
+    // MARK: Background opacity
+
+    /// Puts the backing view behind the popover's content, in the frame view that also draws the arrow,
+    /// so the whole popover (arrow included) gets the same tint.
+    private func installBacking() {
+        guard let frameView = popover.contentViewController?.view.window?.contentView?.superview else { return }
+        popoverBacking.alpha = store.prefs.popoverOpacity
+        guard popoverBacking.superview !== frameView else { return }
+        popoverBacking.removeFromSuperview()
+        popoverBacking.frame = frameView.bounds
+        popoverBacking.autoresizingMask = [.width, .height]
+        frameView.addSubview(popoverBacking, positioned: .below, relativeTo: popover.contentViewController?.view.window?.contentView)
+    }
+
+    private func observeOpacity() {
+        withObservationTracking {
+            _ = store.prefs.popoverOpacity
+        } onChange: { [weak self] in
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.popoverBacking.alpha = self.store.prefs.popoverOpacity
+                self.observeOpacity()
+            }
+        }
     }
 
     // MARK: Window
@@ -235,6 +264,25 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
             hotKey = nil
         }
     }
+}
+
+/// A window-colored fill at the chosen opacity. Drawn (not a layer color) so it follows light and dark.
+final class PopoverBacking: NSView {
+    var alpha: Double = 0 {
+        didSet { if alpha != oldValue { isHidden = alpha <= 0.001; needsDisplay = true } }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.windowBackgroundColor.withAlphaComponent(alpha).setFill()
+        dirtyRect.fill()
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
+    }
+
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// Window-level actions the SwiftUI views can trigger.

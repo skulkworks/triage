@@ -79,10 +79,10 @@ nonisolated final class GitHubClient: Sendable {
 
     // MARK: Notifications
 
-    /// The whole inbox (read and unread, not done). `ifModifiedSince` makes an unchanged poll free.
-    /// Without `is_done=false`, `all=true` also returns threads already marked done.
-    func notifications(ifModifiedSince: String?, maxPages: Int = 40) async throws -> NotificationsPoll {
-        var url: URL? = URL(string: "https://api.github.com/notifications?all=true&is_done=false&per_page=50")
+    /// The whole inbox (read and unread, not done), or with `done` the threads marked done.
+    /// `ifModifiedSince` makes an unchanged poll free. Without `is_done`, `all=true` returns both.
+    func notifications(done: Bool = false, ifModifiedSince: String?, maxPages: Int = 40) async throws -> NotificationsPoll {
+        var url: URL? = URL(string: "https://api.github.com/notifications?all=true&is_done=\(done)&per_page=50")
         var all: [GHNotification] = []
         var lastModified: String?
         var interval = 60
