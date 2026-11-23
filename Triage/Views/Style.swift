@@ -143,7 +143,10 @@ struct Avatar: View {
     var size: CGFloat = 16
 
     var body: some View {
-        AsyncImage(url: url.flatMap { URL(string: $0.contains("?") ? "\($0)&s=\(Int(size * 2))" : "\($0)?s=\(Int(size * 2))") }) { image in
+        AsyncImage(url: url.flatMap { u in
+            // GitHub avatars take a size; the demo's data: URLs don't.
+            URL(string: u.hasPrefix("data:") ? u : u.contains("?") ? "\(u)&s=\(Int(size * 2))" : "\(u)?s=\(Int(size * 2))")
+        }) { image in
             image.resizable().interpolation(.high)
         } placeholder: {
             Circle().fill(.quaternary)

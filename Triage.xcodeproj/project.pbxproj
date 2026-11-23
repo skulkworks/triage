@@ -21,6 +21,7 @@
 		548E20C9F071D33CBABF5A45 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B669ABDCC417A36F5EB91E2 /* SettingsView.swift */; };
 		560429753D57C96D9B896FDE /* SelfTest.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA29185C0E5457DBA2CAA1CF /* SelfTest.swift */; };
 		593D34E52E35E0A27F81AC9E /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC05EC9E4FBA22DC3262B6B0 /* RootView.swift */; };
+		5986200B9139647FFBC1D454 /* DemoData.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CF79232C59B062ED1FEB347 /* DemoData.swift */; };
 		5CA34EEDEBDB38BB8E988F07 /* TriageApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A59DB5A3F5CDCB16BE38D182 /* TriageApp.swift */; };
 		5F30CE83912B1AD3E0E9EF09 /* Composer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90678564FD587FD54ED1AD79 /* Composer.swift */; };
 		5FBD01709C744EB990113D9F /* InboxQueryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CC1807E18F5BECD962CCF48 /* InboxQueryTests.swift */; };
@@ -54,6 +55,7 @@
 		2E84F2F83994E7EED18D38E9 /* TriageTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TriageTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		392153E08E909B4459D455DC /* ConversationWebView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationWebView.swift; sourceTree = "<group>"; };
 		3B5B041B536AB86137209401 /* StatusController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusController.swift; sourceTree = "<group>"; };
+		3CF79232C59B062ED1FEB347 /* DemoData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoData.swift; sourceTree = "<group>"; };
 		40BD69945016486F440B472C /* Notification.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notification.swift; sourceTree = "<group>"; };
 		67C1F56DBE83F81D0331B9BB /* NotificationRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationRow.swift; sourceTree = "<group>"; };
 		71298FBEE39EE0073BEE2237 /* Triage.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Triage.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -117,6 +119,7 @@
 		6F8375090FB0AF467C5F77AA /* Store */ = {
 			isa = PBXGroup;
 			children = (
+				3CF79232C59B062ED1FEB347 /* DemoData.swift */,
 				DC144D219F9C335725DC85B3 /* InboxQuery.swift */,
 				A2E4C53093E5307F685D089D /* InboxStore.swift */,
 				93236641ECE27DE0F4A53A1A /* LocalState.swift */,
@@ -314,6 +317,7 @@
 				5F30CE83912B1AD3E0E9EF09 /* Composer.swift in Sources */,
 				9BF8BBEB4B5F3689802BF741 /* ConversationHTML.swift in Sources */,
 				3B6AFE21BF8C6193CB6A8594 /* ConversationWebView.swift in Sources */,
+				5986200B9139647FFBC1D454 /* DemoData.swift in Sources */,
 				6150228F6996199DC4C90BF9 /* DetailPane.swift in Sources */,
 				E869838454491402D4C5A69B /* GitHubClient.swift in Sources */,
 				D2BC36F2FA5E6FDEBE41B9BC /* GraphQL.swift in Sources */,

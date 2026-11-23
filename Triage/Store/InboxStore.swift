@@ -179,7 +179,34 @@ final class InboxStore {
     // MARK: Lifecycle
 
     func start() {
+        if Demo.isOn { return startDemo() }
         Task { await signIn() }
+    }
+
+    /// `-triageDemo`: the made-up inbox in DemoData, with every conversation already loaded. No client
+    /// is created, so nothing reaches GitHub.
+    private func startDemo() {
+        let demo = DemoData.make()
+        viewer = demo.viewer
+        notifications = demo.inbox
+        done = demo.done
+        for (id, s) in demo.subjects {
+            info[id] = SubjectInfo(s)
+            details[id] = .conversation(s)
+        }
+        for (id, r) in demo.releases {
+            info[id] = SubjectInfo(release: r)
+            details[id] = .release(r)
+        }
+        for n in demo.inbox + demo.done {
+            if details[n.id] == nil { details[n.id] = .unsupported }
+            detailRevision[n.id] = n.revisionKey
+            infoRevision[n.id] = n.revisionKey
+        }
+        inboxIDs = Set(notifications.map(\.id))
+        inboxComplete = true
+        lastRefreshed = DemoData.now
+        auth = .signedIn
     }
 
     func signIn(token explicit: String? = nil) async {

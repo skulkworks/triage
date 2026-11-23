@@ -329,6 +329,7 @@ enum ConversationHTML {
 
     private static func avatar(_ url: String?, _ size: Int) -> String {
         guard let url, !url.isEmpty else { return "" }
+        if url.hasPrefix("data:") { return url }  // the demo's generated avatars
         return url + (url.contains("?") ? "&" : "?") + "s=\(size)"
     }
 
@@ -532,6 +533,7 @@ enum ConversationHTML {
     .replies .avatar { width: 24px; height: 24px; }
     .category { color: var(--muted); font-size: 13px; margin-bottom: 10px !important; }
     .category .emoji, .category g-emoji { font-style: normal; }
+    .category div { display: inline; }  /* GitHub wraps emojiHTML in a div */
     .release-title { margin: 0 0 12px; font-size: 20px; }
     main:not(.timeline) > .item { margin-bottom: 14px; }
     """

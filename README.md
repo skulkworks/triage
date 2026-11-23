@@ -2,6 +2,8 @@
 
 A menu-bar inbox for GitHub notifications on macOS 26+. It does what the github.com inbox does (read, done, save, unsubscribe, filters) and lets you read the whole conversation and act on it without opening a browser: reply, close or reopen with a reason, merge, approve, label, assign yourself, react.
 
+![Triage with a pull request open, in the made-up demo inbox](docs/screenshot.png)
+
 ## Install
 
 Triage needs macOS 26 (Tahoe) or later.
@@ -43,7 +45,7 @@ xcodegen generate
 xcodebuild -project Triage.xcodeproj -scheme Triage -configuration Debug -derivedDataPath build/DerivedData build
 ```
 
-Debug builds are "Triage Dev" (`dev.skulkworks.triage.debug`) with their own Keychain item and settings. `-triageSelfTest -triageOut <dir>` runs read-only checks against the signed-in account and writes rendered conversations to `<dir>`. `-triageWindow`, `-triageShowOnLaunch`, `-triageOpenThread <id>`, `-triageScope <tab>` and `-triageAppearance light|dark` are for screenshots.
+Debug builds are "Triage Dev" (`dev.skulkworks.triage.debug`) with their own Keychain item and settings. `-triageSelfTest -triageOut <dir>` runs read-only checks against the signed-in account and writes rendered conversations to `<dir>`. `-triageDemo` fills the app with a made-up inbox (`Triage/Store/DemoData.swift`) without signing in or touching GitHub or the saved state; with `-triageWindow`, `-triageShowOnLaunch`, `-triageOpenThread <id>` (the demo's ids are `demo-1` to `demo-11`, done ones `demo-21` to `demo-25`), `-triageScope <tab>`, `-triageSearch <query>` and `-triageAppearance light|dark` it's how the README and website screenshots are made.
 
 Releases go through `scripts/release.sh`, which drives SkulkWorks' shared release scripts (a private repo): archive with Developer ID, notarize, DMG, Sparkle appcast on `updates.skulkworks.dev/triage`, the Homebrew cask, and a GitHub Release. Release notes live in `changelog/<version>.md`. Building the app needs none of that.
 

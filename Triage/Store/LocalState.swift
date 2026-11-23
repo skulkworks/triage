@@ -71,12 +71,14 @@ struct LocalState: Codable {
     }
 
     static func load() -> LocalState {
+        if Demo.isOn { return DemoData.localState() }
         guard let data = try? Data(contentsOf: url),
               let state = try? JSONDecoder().decode(LocalState.self, from: data) else { return LocalState() }
         return state
     }
 
     func save() {
+        guard !Demo.isOn else { return }
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]
         if let data = try? enc.encode(self) { try? data.write(to: Self.url, options: .atomic) }

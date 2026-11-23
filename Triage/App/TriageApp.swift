@@ -31,7 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Notifier.shared.onRead = { [weak self] id in self?.store.markRead([id]) }
         store.start()
         _ = Updater.shared  // starts Sparkle's scheduled checks
-        // Debug helpers for screenshots: -triageShowOnLaunch, -triageWindow, -triageOpenThread <id>, -triageScope <tab>, -triageAppearance light|dark.
+        // Screenshot helpers: -triageDemo (made-up inbox, see DemoData), -triageShowOnLaunch, -triageWindow,
+        // -triageOpenThread <id>, -triageScope <tab>, -triageSearch <query>, -triageAppearance light|dark.
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "-triageAppearance"), args.indices.contains(i + 1) {
             NSApp.appearance = NSAppearance(named: args[i + 1] == "light" ? .aqua : .darkAqua)
@@ -47,6 +48,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let i = args.firstIndex(of: "-triageScope"), args.indices.contains(i + 1), let scope = InboxStore.Scope(rawValue: args[i + 1]) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 6) { self.store.scope = scope }
+        }
+        if let i = args.firstIndex(of: "-triageSearch"), args.indices.contains(i + 1) {
+            let query = args[i + 1]
+            DispatchQueue.main.asyncAfter(deadline: .now() + 6) { self.store.search = query }
         }
     }
 
