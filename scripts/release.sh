@@ -46,6 +46,8 @@ export WORKSPACE="Triage.xcodeproj/project.xcworkspace"
 export BUNDLE_ID="dev.skulkworks.triage"
 export TEAM_ID="M5N5FDK55S"
 export GITHUB_REPO="skulkworks/triage"
+# Den notarizes only when it has credentials; default to the shared keychain profile.
+export NOTARY_PROFILE="${NOTARY_PROFILE:-skulkworks-notary}"
 export PROJECT_ROOT
 
 # --- Update hosting (Cloudflare R2, custom domain updates.skulkworks.dev) ----------
