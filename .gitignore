@@ -2,3 +2,6 @@ build/
 *.xcuserstate
 xcuserdata/
 .DS_Store
+
+# Sparkle private-key backups (generate_keys -x); never commit
+.sparkle-keys/

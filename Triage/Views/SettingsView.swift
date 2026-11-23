@@ -23,6 +23,7 @@ struct SettingsView: View {
 private struct GeneralSettings: View {
     @Bindable var prefs: Preferences
     @State private var launchAtLogin = Preferences.shared.launchAtLogin
+    @State private var checksAutomatically = Updater.shared.automaticallyChecks
 
     var body: some View {
         Form {
@@ -30,6 +31,14 @@ private struct GeneralSettings: View {
                 Toggle("Launch at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, v in prefs.launchAtLogin = v }
                 Toggle("Show or hide with \(HotKey.display) from any app", isOn: $prefs.hotKeyEnabled)
+            }
+            Section("Updates") {
+                Toggle("Check for updates automatically", isOn: $checksAutomatically)
+                    .onChange(of: checksAutomatically) { _, v in Updater.shared.automaticallyChecks = v }
+                LabeledContent("Version \(Bundle.main.shortVersion)") {
+                    Button("Check Now") { Updater.shared.checkForUpdates() }
+                        .disabled(!Updater.shared.canCheck)
+                }
             }
             Section("Menu bar") {
                 Toggle("Show a count next to the icon", isOn: $prefs.showCountInMenuBar)
@@ -207,5 +216,14 @@ private struct AccountSettings: View {
             }
         }
         .formStyle(.grouped)
+    }
+}
+
+extension Bundle {
+    /// "0.1.0 (1)"
+    var shortVersion: String {
+        let v = infoDictionary?["CFBundleShortVersionString"] as? String ?? "?"
+        let b = infoDictionary?["CFBundleVersion"] as? String ?? "?"
+        return "\(v) (\(b))"
     }
 }

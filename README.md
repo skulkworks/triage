@@ -2,6 +2,18 @@
 
 A menu-bar inbox for GitHub notifications on macOS 26+. It does what the github.com inbox does (read, done, save, unsubscribe, filters) and lets you read the whole conversation and act on it without opening a browser: reply, close or reopen with a reason, merge, approve, label, assign yourself, react.
 
+## Install
+
+Triage needs macOS 26 (Tahoe) or later.
+
+```sh
+brew install --cask skulkworks/tap/triage
+```
+
+Or download the DMG from [Releases](https://github.com/skulkworks/triage/releases). Triage updates itself with Sparkle; turn automatic checks on or off in Settings › General.
+
+Sign in with the GitHub CLI (`gh auth login`), or paste a personal access token with the **notifications** and **repo** scopes.
+
 ## Using it
 
 - Click the tray icon in the menu bar, or press ⌃⌥G from any app. Right-click the icon for Refresh, Open in Window, Settings and Quit.
@@ -32,3 +44,9 @@ xcodebuild -project Triage.xcodeproj -scheme Triage -configuration Debug -derive
 ```
 
 Debug builds are "Triage Dev" (`dev.skulkworks.triage.debug`) with their own Keychain item and settings. `-triageSelfTest -triageOut <dir>` runs read-only checks against the signed-in account and writes rendered conversations to `<dir>`. `-triageWindow`, `-triageShowOnLaunch`, `-triageOpenThread <id>`, `-triageScope <tab>` and `-triageAppearance light|dark` are for screenshots.
+
+Releases go through `scripts/release.sh`, which drives SkulkWorks' shared release scripts (a private repo): archive with Developer ID, notarize, DMG, Sparkle appcast on `updates.skulkworks.dev/triage`, the Homebrew cask, and a GitHub Release. Release notes live in `changelog/<version>.md`. Building the app needs none of that.
+
+## License
+
+Apache License 2.0. See [LICENSE](LICENSE).

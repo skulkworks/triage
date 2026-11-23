@@ -86,6 +86,7 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         menu.addItem(withTitle: "Open in Window", action: #selector(openWindow), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Settings…", action: #selector(openSettingsAction), keyEquivalent: ",").target = self
+        menu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Triage", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         item.menu = menu
@@ -96,6 +97,7 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     @objc private func refreshNow() { Task { await store.refresh(force: true) } }
     @objc private func openWindow() { showWindow() }
     @objc private func openSettingsAction() { showSettings() }
+    @objc private func checkForUpdates() { Updater.shared.checkForUpdates() }
 
     // MARK: Popover
 

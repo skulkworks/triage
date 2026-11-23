@@ -1,0 +1,26 @@
+{
+  "schema": 1,
+  "app": "Triage",
+  "versions": [
+    {
+      "version": "0.1.0",
+      "build": 1,
+      "date": "2026-11-23",
+      "sections": [
+        {
+          "name": "New",
+          "type": "new",
+          "items": [
+            "First release: your GitHub notifications inbox in the menu bar, with the whole conversation, replies and triage actions without opening a browser",
+            "Done, Save, Snooze, Unsubscribe and Mark as read or unread, with undo, keyboard shortcuts and bulk actions",
+            "Done tab for finding threads you cleared too early, with Move to Inbox",
+            "Filters by repo, org, reason, state, label and author, plus saved filters",
+            "Conversations are fetched ahead of time, so threads open instantly",
+            "macOS notifications for new activity, a global hotkey and launch at login"
+          ]
+        }
+      ],
+      "html": "<h3>New</h3>\n<ul>\n<li>First release: your GitHub notifications inbox in the menu bar, with the whole conversation, replies and triage actions without opening a browser</li>\n<li>Done, Save, Snooze, Unsubscribe and Mark as read or unread, with undo, keyboard shortcuts and bulk actions</li>\n<li>Done tab for finding threads you cleared too early, with Move to Inbox</li>\n<li>Filters by repo, org, reason, state, label and author, plus saved filters</li>\n<li>Conversations are fetched ahead of time, so threads open instantly</li>\n<li>macOS notifications for new activity, a global hotkey and launch at login</li>\n</ul>"
+    }
+  ]
+}

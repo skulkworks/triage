@@ -30,6 +30,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Notifier.shared.onDone = { [weak self] id in self?.store.markDone([id]) }
         Notifier.shared.onRead = { [weak self] id in self?.store.markRead([id]) }
         store.start()
+        _ = Updater.shared  // starts Sparkle's scheduled checks
         // Debug helpers for screenshots: -triageShowOnLaunch, -triageWindow, -triageOpenThread <id>, -triageScope <tab>, -triageAppearance light|dark.
         let args = CommandLine.arguments
         if let i = args.firstIndex(of: "-triageAppearance"), args.indices.contains(i + 1) {
@@ -69,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "Settings…", action: #selector(openSettings), keyEquivalent: ",").target = self
+        appMenu.addItem(withTitle: "Check for Updates…", action: #selector(checkForUpdates), keyEquivalent: "").target = self
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit Triage", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
@@ -95,4 +97,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openSettings() { status?.showSettings() }
+    @objc private func checkForUpdates() { Updater.shared.checkForUpdates() }
 }

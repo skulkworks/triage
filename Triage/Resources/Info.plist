@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>SUFeedURL</key>
+	<string>https://updates.skulkworks.dev/triage/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>GW7X7O/4w3LNPQbFP8CfmdwK8Xu9AbU+aooc8eLc5kc=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+</dict>
+</plist>

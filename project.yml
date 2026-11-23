@@ -7,6 +7,11 @@ options:
   generateEmptyDirectories: true
   groupSortPosition: top
 
+packages:
+  Sparkle:
+    url: https://github.com/sparkle-project/Sparkle
+    from: 2.8.1
+
 configs:
   Debug: debug
   Release: release
@@ -48,14 +53,20 @@ targets:
     platform: macOS
     sources:
       - path: Triage
+        excludes:
+          - Resources/Info.plist
+    dependencies:
+      - package: Sparkle
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
+        # Sparkle's feed and public key; Xcode merges the generated keys into it.
+        INFOPLIST_FILE: Triage/Resources/Info.plist
         INFOPLIST_KEY_LSUIElement: YES
         PRODUCT_MODULE_NAME: Triage
         INFOPLIST_KEY_CFBundleDisplayName: Triage
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.developer-tools
-        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Trilby Media"
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 SkulkWorks"
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_ENTITLEMENTS: Triage/Resources/Triage.entitlements
       configs:
