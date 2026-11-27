@@ -1,22 +1,95 @@
+import AppKit
 import SwiftUI
 
-struct SettingsView: View {
-    @Bindable var store: InboxStore
+enum SettingsTab: Int, CaseIterable {
+    case general, notifications, snippets, filters, account, about
+}
+
+/// The Settings window's tabs. An AppKit tab view controller with toolbar tabs, the standard Mac
+/// Settings window: a SwiftUI TabView in this window hid every tab behind the toolbar's » button.
+final class SettingsTabController: NSTabViewController {
+    init(store: InboxStore) {
+        super.init(nibName: nil, bundle: nil)
+        tabStyle = .toolbar
+        func add(_ title: String, _ symbol: String, _ view: some View) {
+            let host = NSHostingController(rootView: view.frame(width: 560, height: 480))
+            host.sizingOptions = .preferredContentSize
+            host.title = title  // the window shows the selected tab's name
+            let item = NSTabViewItem(viewController: host)
+            item.label = title
+            item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: title)
+            addTabViewItem(item)
+        }
+        // In SettingsTab order.
+        add("General", "gearshape", GeneralSettings(prefs: store.prefs))
+        add("Notifications", "bell.badge", NotificationSettings(prefs: store.prefs))
+        add("Snippets", "text.bubble", SnippetSettings(store: store))
+        add("Filters", "line.3.horizontal.decrease", FilterSettings(store: store))
+        add("Account", "person.crop.circle", AccountSettings(store: store))
+        add("About", "info.circle", AboutSettings())
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+
+    func select(_ tab: SettingsTab) { selectedTabViewItemIndex = tab.rawValue }
+}
+
+private struct AboutSettings: View {
+    private static let links: [(title: String, url: URL)] = [
+        ("Triage on skulkworks.dev", URL(string: "https://skulkworks.dev/triage")!),
+        ("Release notes", URL(string: "https://skulkworks.dev/triage/changelog")!),
+        ("Source on GitHub", URL(string: "https://github.com/skulkworks/triage")!),
+        ("Privacy policy", URL(string: "https://skulkworks.dev/privacy")!),
+    ]
 
     var body: some View {
-        TabView {
-            GeneralSettings(prefs: store.prefs)
-                .tabItem { Label("General", systemImage: "gearshape") }
-            NotificationSettings(prefs: store.prefs)
-                .tabItem { Label("Notifications", systemImage: "bell.badge") }
-            SnippetSettings(store: store)
-                .tabItem { Label("Snippets", systemImage: "text.bubble") }
-            FilterSettings(store: store)
-                .tabItem { Label("Filters", systemImage: "line.3.horizontal.decrease") }
-            AccountSettings(store: store)
-                .tabItem { Label("Account", systemImage: "person.crop.circle") }
+        let info = Bundle.main.infoDictionary
+        Form {
+            Section {
+                VStack(spacing: 6) {
+                    Image(nsImage: NSApp.applicationIconImage)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 88, height: 88)
+                        .accessibilityHidden(true)
+                    Text("Triage").font(.title2.weight(.semibold))
+                    Text("Version \(Bundle.main.shortVersion)")
+                        .foregroundStyle(.secondary)
+                        .monospacedDigit()
+                        .textSelection(.enabled)
+                    Text("Your GitHub notifications inbox in the menu bar: read, reply and triage without opening a browser.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 4)
+                    Button("Check for Updates…") { Updater.shared.checkForUpdates() }
+                        .disabled(!Updater.shared.canCheck)
+                        .padding(.top, 6)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+            }
+            Section {
+                ForEach(Self.links, id: \.title) { link in
+                    Link(destination: link.url) {
+                        HStack {
+                            Text(link.title)
+                            Spacer()
+                            Image(systemName: "arrow.up.forward").foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            } footer: {
+                Text("\(info?["NSHumanReadableCopyright"] as? String ?? "© SkulkWorks") · Apache License 2.0")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity)
+            }
         }
-        .frame(width: 560, height: 480)
+        .formStyle(.grouped)
     }
 }
 

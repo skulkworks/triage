@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.0.0 (2026-11-27, build 3)
+
+### New
+- About Triage, from the menu-bar icon's right-click menu, the app menu and the inbox's ⋯ menu: the version, Check for Updates and links to the site, release notes, source and privacy policy
+
+### Fixed
+- The Settings window hid its tabs behind the toolbar's » button, so only General showed; Settings now has a standard tab bar
+
 ## 0.1.1 (2026-11-27, build 2)
 
 ### Improved

@@ -3,6 +3,28 @@
   "app": "Triage",
   "versions": [
     {
+      "version": "1.0.0",
+      "build": 3,
+      "date": "2026-11-27",
+      "sections": [
+        {
+          "name": "New",
+          "type": "new",
+          "items": [
+            "About Triage, from the menu-bar icon's right-click menu, the app menu and the inbox's ⋯ menu: the version, Check for Updates and links to the site, release notes, source and privacy policy"
+          ]
+        },
+        {
+          "name": "Fixed",
+          "type": "fixed",
+          "items": [
+            "The Settings window hid its tabs behind the toolbar's » button, so only General showed; Settings now has a standard tab bar"
+          ]
+        }
+      ],
+      "html": "<h3>New</h3>\n<ul>\n<li>About Triage, from the menu-bar icon's right-click menu, the app menu and the inbox's ⋯ menu: the version, Check for Updates and links to the site, release notes, source and privacy policy</li>\n</ul>\n<h3>Fixed</h3>\n<ul>\n<li>The Settings window hid its tabs behind the toolbar's » button, so only General showed; Settings now has a standard tab bar</li>\n</ul>"
+    },
+    {
       "version": "0.1.1",
       "build": 2,
       "date": "2026-11-27",

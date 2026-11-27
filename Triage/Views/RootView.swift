@@ -88,7 +88,7 @@ private struct KeyHint: View {
 }
 
 private struct PresentationKey: EnvironmentKey { static let defaultValue = Presentation.popover }
-private struct WindowActionsKey: EnvironmentKey { static let defaultValue = WindowActions(popOut: {}, settings: {}, dismiss: {}) }
+private struct WindowActionsKey: EnvironmentKey { static let defaultValue = WindowActions(popOut: {}, settings: {}, about: {}, dismiss: {}) }
 
 extension EnvironmentValues {
     var presentation: Presentation {

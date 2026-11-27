@@ -110,6 +110,7 @@ struct InboxPane: View {
             }
             Button("Keyboard Shortcuts", systemImage: "keyboard") { showShortcuts = true }
             Button("Settings…", systemImage: "gearshape") { windowActions.settings() }
+            Button("About Triage", systemImage: "info.circle") { windowActions.about() }
             Divider()
             Button("Quit Triage", systemImage: "power") { NSApp.terminate(nil) }
         } label: {

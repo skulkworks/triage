@@ -12,6 +12,7 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     private let popover = NSPopover()
     private var window: NSWindow?
     private var settingsWindow: NSWindow?
+    private var settingsTabs: SettingsTabController?
     private var hotKey: HotKey?
     private let popoverBacking = PopoverBacking()
 
@@ -82,6 +83,8 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
 
     private func showMenu() {
         let menu = NSMenu()
+        menu.addItem(withTitle: "About Triage", action: #selector(openAbout), keyEquivalent: "").target = self
+        menu.addItem(.separator())
         menu.addItem(withTitle: "Refresh", action: #selector(refreshNow), keyEquivalent: "r").target = self
         menu.addItem(withTitle: "Open in Window", action: #selector(openWindow), keyEquivalent: "").target = self
         menu.addItem(.separator())
@@ -97,6 +100,7 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
     @objc private func refreshNow() { Task { await store.refresh(force: true) } }
     @objc private func openWindow() { showWindow() }
     @objc private func openSettingsAction() { showSettings() }
+    @objc private func openAbout() { showSettings(tab: .about) }
     @objc private func checkForUpdates() { Updater.shared.checkForUpdates() }
 
     // MARK: Popover
@@ -115,6 +119,7 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         WindowActions(
             popOut: { [weak self] in self?.showWindow() },
             settings: { [weak self] in self?.showSettings() },
+            about: { [weak self] in self?.showSettings(tab: .about) },
             dismiss: { [weak self] in self?.dismiss() })
     }
 
@@ -243,17 +248,19 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
 
     // MARK: Settings
 
-    func showSettings() {
+    /// Opens Settings, on a given tab when asked (About Triage opens it on About).
+    func showSettings(tab: SettingsTab? = nil) {
         dismiss()
         if settingsWindow == nil {
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 560, height: 520),
-                             styleMask: [.titled, .closable], backing: .buffered, defer: false)
-            w.title = "Triage Settings"
+            let tabs = SettingsTabController(store: store)
+            let w = NSWindow(contentViewController: tabs)
+            w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
-            w.contentViewController = NSHostingController(rootView: SettingsView(store: store))
             w.center()
+            settingsTabs = tabs
             settingsWindow = w
         }
+        if let tab { settingsTabs?.select(tab) }
         NSApp.activate()
         settingsWindow?.makeKeyAndOrderFront(nil)
     }
@@ -297,5 +304,6 @@ final class PopoverBacking: NSView {
 struct WindowActions {
     var popOut: () -> Void
     var settings: () -> Void
+    var about: () -> Void
     var dismiss: () -> Void
 }
