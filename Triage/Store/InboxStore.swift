@@ -160,6 +160,11 @@ final class InboxStore {
     private var infoRevision: [String: String] = [:]
     /// The notification revision each cached detail was loaded at.
     private var detailRevision: [String: String] = [:]
+    /// Each cached conversation's `changeStamp` as loaded, and when it was last checked against GitHub.
+    private var detailStamp: [String: String] = [:]
+    private var checkedAt: [String: Date] = [:]
+    /// How many threads the last change check covered, and how many had changed (for the self-test).
+    private(set) var lastChangeCheck = (checked: 0, changed: 0)
     /// Bumped on sign-in and sign-out, so replies to requests made for another account are dropped.
     private var session = 0
     /// The thread ids GitHub listed in the inbox on the last full fetch (without restored threads),
@@ -260,6 +265,8 @@ final class InboxStore {
         info = [:]
         infoRevision = [:]
         details = [:]
+        detailStamp = [:]
+        checkedAt = [:]
         lastModified = nil
         seeded = false
         auth = .signedOut(tokenSource == .githubCLI ? "Signed out. Triage will use the GitHub CLI's login again on next launch unless you paste a token." : nil)
@@ -302,6 +309,10 @@ final class InboxStore {
             if scope == .done || !local.restored.isEmpty { await refreshDone() }
             lastRefreshed = Date()
             lastError = nil
+            // Threads opened or prefetched earlier may have changed without a new notification.
+            let cutoff = Date().addingTimeInterval(-20)
+            let unchecked = details.keys.filter { (checkedAt[$0] ?? .distantPast) < cutoff }
+            Task { await checkForChanges(unchecked) }
         } catch {
             guard session == self.session else { return }
             lastError = error.localizedDescription
@@ -387,7 +398,6 @@ final class InboxStore {
             n.number != nil && infoRevision[n.id] != n.revisionKey && (n.kind == .issue || n.kind == .pullRequest || n.kind == .discussion)
         }
         guard !todo.isEmpty else { return }
-        nonisolated struct AliasRepo: Decodable, Sendable { var issueOrPullRequest: GQLSubject?; var discussion: GQLSubject? }
         for chunk in stride(from: 0, to: todo.count, by: 40).map({ Array(todo[$0..<min($0 + 40, todo.count)]) }) {
             let items = chunk.enumerated().map { i, n in
                 (alias: "t\(i)", owner: n.owner, name: n.repoName, number: n.number!, discussion: n.kind == .discussion)
@@ -575,6 +585,8 @@ final class InboxStore {
         focused = id
         selection = [id]
         Task { await loadDetail(id) }
+        // A cached copy shows straight away; if the thread changed since, it reloads in place.
+        if details[id] != nil { Task { await checkForChanges([id]) } }
         let ids = orderedIDs
         if let i = ids.firstIndex(of: id) { prefetch([i + 1, i - 1].filter(ids.indices.contains).map { ids[$0] }) }
         if prefs.markReadOnOpen, let n = notification(id), n.unread { markRead([id]) }
@@ -590,6 +602,13 @@ final class InboxStore {
     }
 
     func closeDetail() { focused = nil }
+
+    /// A plain click on a row's text opens it. Selection changes open threads too; this covers the
+    /// row that's already selected, where the selection doesn't change. ⌘ and ⇧ clicks only select.
+    func clickedRow(_ id: String) {
+        guard NSEvent.modifierFlags.isDisjoint(with: [.command, .shift]), focused != id else { return }
+        open(id)
+    }
 
     /// A github.com link to an issue, PR or discussion that's in the inbox opens here instead of the browser.
     func openInApp(_ url: URL) -> Bool {
@@ -845,6 +864,50 @@ final class InboxStore {
         }
     }
 
+    /// Notification timestamps trail a change by about 20 seconds and miss some changes entirely
+    /// (your own comments and edits made elsewhere), so cached conversations are also checked against
+    /// the thread itself: a few timestamps each, one request per 40 threads. A changed thread reloads
+    /// in the background, or in place when it's open.
+    func checkForChanges(_ ids: [String]) async {
+        guard let client else { return }
+        let session = self.session
+        let todo: [(id: String, item: Queries.BatchItem)] = ids.compactMap { id in
+            guard let n = notification(id), let s = details[id]?.subject, detailStamp[id] != nil,
+                  !detailLoading.contains(id), let number = s.number ?? n.number else { return nil }
+            return (id, (alias: "", owner: n.owner, name: n.repoName, number: number, discussion: n.kind == .discussion))
+        }
+        var result = (checked: 0, changed: 0)
+        defer { if session == self.session { lastChangeCheck = result } }
+        for chunk in stride(from: 0, to: todo.count, by: 40).map({ Array(todo[$0..<min($0 + 40, todo.count)]) }) {
+            let items = chunk.enumerated().map { i, t in
+                var item = t.item
+                item.alias = "t\(i)"
+                return item
+            }
+            let asked = Date()
+            do {
+                let data = try await client.graphQL(Queries.changeStamps(items), as: [String: AliasRepo?].self, allowPartial: true)
+                guard session == self.session else { return }
+                for (i, t) in chunk.enumerated() {
+                    checkedAt[t.id] = asked
+                    result.checked += 1
+                    guard let repo = data["t\(i)"] ?? nil, let s = repo.issueOrPullRequest ?? repo.discussion,
+                          let stamp = detailStamp[t.id], s.changeStamp != stamp else { continue }
+                    result.changed += 1
+                    Task { await loadDetail(t.id, force: true, quiet: focused != t.id) }
+                }
+            } catch {
+                NSLog("Change check failed: \(error)")
+            }
+        }
+    }
+
+    #if DEBUG
+    /// Self-test only: make a cached copy look out of date, as if the thread changed after it loaded.
+    func debugAgeCachedCopy(_ id: String) { detailStamp[id] = "stale" }
+    func debugCachedStamp(_ id: String) -> String? { detailStamp[id] }
+    #endif
+
     /// `quiet` is for prefetching: a failure isn't shown, and opening the thread tries again.
     func loadDetail(_ id: String, force: Bool = false, quiet: Bool = false) async {
         guard let client, let n = notification(id) else { return }
@@ -891,6 +954,8 @@ final class InboxStore {
                 if n.kind != .release { infoRevision[id] = n.revisionKey }
             }
             details[id] = detail
+            detailStamp[id] = detail.subject?.changeStamp
+            checkedAt[id] = Date()
             detailRevision[id] = n.revisionKey
         } catch {
             // Moving to another thread cancels the fetch; that isn't worth an error page.
@@ -1036,3 +1101,6 @@ final class InboxStore {
         }
     }
 }
+
+/// One aliased repository lookup in a batch query.
+private nonisolated struct AliasRepo: Decodable, Sendable { var issueOrPullRequest: GQLSubject?; var discussion: GQLSubject? }

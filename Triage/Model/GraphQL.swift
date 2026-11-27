@@ -8,6 +8,8 @@ nonisolated struct GQLNodes<T: Decodable & Sendable>: Decodable, Sendable {
     var totalCount: Int?
     /// Timeline connections: the count after the itemTypes filter (totalCount ignores it).
     var filteredCount: Int?
+    /// Timeline connections: when anything on the timeline last changed.
+    var updatedAt: Date?
     var items: [T] { (nodes ?? []).compactMap { $0 } }
 }
 
@@ -120,6 +122,7 @@ nonisolated struct GQLSubject: Decodable, Sendable {
     var locked: Bool?
     var createdAt: Date?
     var updatedAt: Date?
+    var lastEditedAt: Date?
     var author: GQLActor?
     var authorAssociation: String?
     var bodyHTML: String?
@@ -149,6 +152,13 @@ nonisolated struct GQLSubject: Decodable, Sendable {
     // Discussions
     var category: GQLCategory?
     var answer: Answer?
+
+    /// Moves when the thread changes: comments, events, labels, state, edits to the opening post.
+    /// Built from `Queries.stampFields`, which the detail queries also fetch.
+    var changeStamp: String {
+        let dates = [updatedAt, lastEditedAt, timelineItems?.updatedAt].map { $0.map { "\($0.timeIntervalSince1970)" } ?? "-" }
+        return (dates + ["\(comments?.totalCount ?? -1)"]).joined(separator: "|")
+    }
 
     struct Milestone: Decodable, Sendable { var title: String }
     struct Answer: Decodable, Sendable { var id: String }

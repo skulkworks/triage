@@ -27,67 +27,73 @@ struct NotificationRow: View {
             .disabled(isDone)
             .help(isDone ? "" : n.unread ? "Mark as read (⇧I)" : "Mark as unread (⇧U)")
             .accessibilityLabel(n.unread ? "Unread. Mark as read" : "Mark as unread")
-            Image(systemName: glyph.symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(glyph.color)
-                .frame(width: 16)
-                .padding(.top, 1)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
-                    Text(n.repository.fullName)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    if let number = n.number { Text(verbatim: "#\(number)").monospacedDigit().opacity(0.8) }
-                    Spacer(minLength: 4)
-                    if store.local.saved.contains(n.id) {
-                        Image(systemName: "bookmark.fill").foregroundStyle(GHColor.attention).imageScale(.small)
+            HStack(alignment: .top, spacing: 7) {
+                Image(systemName: glyph.symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(glyph.color)
+                    .frame(width: 16)
+                    .padding(.top, 1)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 4) {
+                        Text(n.repository.fullName)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        if let number = n.number { Text(verbatim: "#\(number)").monospacedDigit().opacity(0.8) }
+                        Spacer(minLength: 4)
+                        if store.local.saved.contains(n.id) {
+                            Image(systemName: "bookmark.fill").foregroundStyle(GHColor.attention).imageScale(.small)
+                        }
+                        if store.isSnoozed(n), let until = store.local.snoozed[n.id]?.until {
+                            Label(until.shortAgoFuture, systemImage: "moon.zzz.fill")
+                                .labelStyle(.titleAndIcon)
+                                .foregroundStyle(GHColor.done)
+                        }
+                        Text(n.updatedAt.shortAgo)
+                            .monospacedDigit()
+                            .help(n.updatedAt.formatted(date: .complete, time: .shortened))
                     }
-                    if store.isSnoozed(n), let until = store.local.snoozed[n.id]?.until {
-                        Label(until.shortAgoFuture, systemImage: "moon.zzz.fill")
-                            .labelStyle(.titleAndIcon)
-                            .foregroundStyle(GHColor.done)
-                    }
-                    Text(n.updatedAt.shortAgo)
-                        .monospacedDigit()
-                        .help(n.updatedAt.formatted(date: .complete, time: .shortened))
-                }
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
 
-                // Read threads keep full-strength text; weight and the blue dot carry "unread".
-                Text(n.subject.title)
-                    .font(.system(size: 13, weight: n.unread ? .semibold : .regular))
-                    .foregroundStyle(.primary)
-                    .opacity(n.unread ? 1 : 0.86)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    // Read threads keep full-strength text; weight and the blue dot carry "unread".
+                    Text(n.subject.title)
+                        .font(.system(size: 13, weight: n.unread ? .semibold : .regular))
+                        .foregroundStyle(.primary)
+                        .opacity(n.unread ? 1 : 0.86)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
-                HStack(spacing: 6) {
-                    ReasonChip(label: Reason.label(n.reason), tint: reasonTint(n.reason))
-                    if let author = info?.author {
-                        HStack(spacing: 4) {
-                            Avatar(url: author.avatarUrl, size: 14)
-                            Text(author.display).lineLimit(1)
+                    HStack(spacing: 6) {
+                        ReasonChip(label: Reason.label(n.reason), tint: reasonTint(n.reason))
+                        if let author = info?.author {
+                            HStack(spacing: 4) {
+                                Avatar(url: author.avatarUrl, size: 14)
+                                Text(author.display).lineLimit(1)
+                            }
+                        }
+                        if let count = info?.commentCount, count > 0 {
+                            HStack(spacing: 3) {
+                                Image(systemName: "bubble.left").imageScale(.small)
+                                Text("\(count)").monospacedDigit()
+                            }
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("\(count) comment\(count == 1 ? "" : "s")")
+                        }
+                        ForEach(info?.labels.prefix(3) ?? [], id: \.name) { LabelChip(name: $0.name, color: $0.color) }
+                        if let extra = info?.labels.count, extra > 3 {
+                            Text("+\(extra - 3)")
                         }
                     }
-                    if let count = info?.commentCount, count > 0 {
-                        HStack(spacing: 3) {
-                            Image(systemName: "bubble.left").imageScale(.small)
-                            Text("\(count)").monospacedDigit()
-                        }
-                        .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("\(count) comment\(count == 1 ? "" : "s")")
-                    }
-                    ForEach(info?.labels.prefix(3) ?? [], id: \.name) { LabelChip(name: $0.name, color: $0.color) }
-                    if let extra = info?.labels.count, extra > 3 {
-                        Text("+\(extra - 3)")
-                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .padding(.top, 1)
                 }
-                .font(.system(size: 11))
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .padding(.top, 1)
             }
+            .contentShape(Rectangle())
+            // The list opens a thread when its selection changes, so a click on a row that's already
+            // selected but closed (after Esc, or after j/k with nothing open) would do nothing.
+            .simultaneousGesture(TapGesture().onEnded { store.clickedRow(n.id) })
             // Room for the Done button, which sits over the row's trailing edge.
             Color.clear.frame(width: CircleButton.width)
         }

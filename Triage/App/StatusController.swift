@@ -231,6 +231,12 @@ final class StatusController: NSObject, NSPopoverDelegate, NSWindowDelegate {
         window?.makeKeyAndOrderFront(nil)
     }
 
+    /// Coming back to the window: check the open thread, which may have changed in the browser meanwhile.
+    func windowDidBecomeKey(_ notification: Notification) {
+        guard (notification.object as? NSWindow) == window, let id = store.focused else { return }
+        Task { await store.checkForChanges([id]) }
+    }
+
     func windowWillClose(_ notification: Notification) {
         if (notification.object as? NSWindow) == window { store.closeDetail() }
     }

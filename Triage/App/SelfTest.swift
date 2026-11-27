@@ -26,8 +26,14 @@ enum SelfTest {
         for kind in TidyKind.allCases { log("   tidy \(kind): \(store.tidyCandidates(kind).count)") }
 
         var picks: [GHNotification] = []
+        // `-triageSelfTestAll`: every inbox and done thread instead of one of each kind.
+        if args.contains("-triageSelfTestAll") {
+            await store.refreshDone()
+            picks = store.notifications + store.done
+            log("   all: \(picks.count) threads")
+        }
         for type in ["Issue", "PullRequest", "Release", "Discussion", "RepositoryAdvisory"] {
-            if let n = store.notifications.first(where: { $0.subject.type == type }) { picks.append(n) }
+            if let n = store.notifications.first(where: { $0.subject.type == type }), !picks.contains(n) { picks.append(n) }
         }
         // An issue with lots of comments, to see a long thread.
         if let busy = store.notifications.filter({ $0.kind == .issue }).max(by: { (store.info[$0.id]?.commentCount ?? 0) < (store.info[$1.id]?.commentCount ?? 0) }),
@@ -46,6 +52,22 @@ enum SelfTest {
             let items = d.subject?.timelineItems?.items.count ?? d.subject?.comments?.items.count ?? 0
             log("OK detail \(n.subject.type) \(n.repository.fullName)#\(n.number ?? 0) items=\(items) html=\(html.count) → \(file)")
         }
+        // Every thread was just loaded, so checking them again must find nothing changed.
+        let loaded = picks.map(\.id).filter { store.details[$0]?.subject != nil }
+        await store.checkForChanges(loaded)
+        let check = store.lastChangeCheck
+        log("\(check.changed == 0 && check.checked == loaded.count ? "OK" : "FAIL") change check: \(check.checked) of \(loaded.count) checked, \(check.changed) changed")
+        #if DEBUG
+        // And a thread that did change must be caught and reloaded.
+        if let id = loaded.first {
+            store.debugAgeCachedCopy(id)
+            await store.checkForChanges([id])
+            let caught = store.lastChangeCheck.changed == 1
+            for _ in 0..<40 where store.debugCachedStamp(id) == "stale" { try? await Task.sleep(for: .milliseconds(250)) }
+            let reloaded = store.debugCachedStamp(id) != "stale"
+            log("\(caught && reloaded ? "OK" : "FAIL") changed thread: caught \(caught), reloaded \(reloaded)")
+        }
+        #endif
         log("DONE")
     }
 }

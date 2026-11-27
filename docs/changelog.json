@@ -3,6 +3,28 @@
   "app": "Triage",
   "versions": [
     {
+      "version": "0.1.1",
+      "build": 2,
+      "date": "2026-11-27",
+      "sections": [
+        {
+          "name": "Improved",
+          "type": "improved",
+          "items": [
+            "Threads you've already opened now pick up changes made elsewhere (a comment from the browser or the CLI, a label, a close) without a manual refresh: Triage checks them against GitHub when you open one, on every poll and when the window comes forward"
+          ]
+        },
+        {
+          "name": "Fixed",
+          "type": "fixed",
+          "items": [
+            "Clicking a row that was still selected after closing its thread did nothing"
+          ]
+        }
+      ],
+      "html": "<h3>Improved</h3>\n<ul>\n<li>Threads you've already opened now pick up changes made elsewhere (a comment from the browser or the CLI, a label, a close) without a manual refresh: Triage checks them against GitHub when you open one, on every poll and when the window comes forward</li>\n</ul>\n<h3>Fixed</h3>\n<ul>\n<li>Clicking a row that was still selected after closing its thread did nothing</li>\n</ul>"
+    },
+    {
       "version": "0.1.0",
       "build": 1,
       "date": "2026-11-22",

@@ -13,15 +13,35 @@ nonisolated enum Queries {
     __typename id number url closed isAnswered author { __typename login avatarUrl } comments { totalCount } labels(first: 8) { nodes { name color } }
     """
 
+    typealias BatchItem = (alias: String, owner: String, name: String, number: Int, discussion: Bool)
+
     /// One aliased lookup per thread, so a whole page of the inbox costs a single request.
-    static func batch(_ items: [(alias: String, owner: String, name: String, number: Int, discussion: Bool)]) -> String {
+    static func batch(_ items: [BatchItem]) -> String {
+        aliased(items, fields: rowFields, discussionFields: discussionRowFields)
+    }
+
+    /// What `GQLSubject.changeStamp` is built from. The detail queries ask for the same fields, and the
+    /// timeline needs the same itemTypes filter: its updatedAt covers only the items it's asked about.
+    static var stampFields: String { """
+    __typename
+    ... on Issue { updatedAt lastEditedAt comments { totalCount } timelineItems(itemTypes: \(issueTimelineTypes)) { updatedAt } }
+    ... on PullRequest { updatedAt lastEditedAt comments { totalCount } timelineItems(itemTypes: \(prTimelineTypes)) { updatedAt } }
+    """ }
+    static let discussionStampFields = "__typename updatedAt lastEditedAt comments { totalCount }"
+
+    /// Whether cached conversations changed: a few timestamps per thread, one request for many threads.
+    static func changeStamps(_ items: [BatchItem]) -> String {
+        aliased(items, fields: stampFields, discussionFields: discussionStampFields)
+    }
+
+    private static func aliased(_ items: [BatchItem], fields: String, discussionFields: String) -> String {
         var q = "query {\n"
         for i in items {
             let owner = escape(i.owner), name = escape(i.name)
             if i.discussion {
-                q += "  \(i.alias): repository(owner: \"\(owner)\", name: \"\(name)\") { discussion(number: \(i.number)) { \(discussionRowFields) } }\n"
+                q += "  \(i.alias): repository(owner: \"\(owner)\", name: \"\(name)\") { discussion(number: \(i.number)) { \(discussionFields) } }\n"
             } else {
-                q += "  \(i.alias): repository(owner: \"\(owner)\", name: \"\(name)\") { issueOrPullRequest(number: \(i.number)) { \(rowFields) } }\n"
+                q += "  \(i.alias): repository(owner: \"\(owner)\", name: \"\(name)\") { issueOrPullRequest(number: \(i.number)) { \(fields) } }\n"
             }
         }
         return q + "}"
@@ -67,17 +87,17 @@ nonisolated enum Queries {
         issueOrPullRequest(number: $number) {
           __typename
           ... on Issue {
-            id number title url state stateReason locked createdAt bodyHTML authorAssociation comments { totalCount }
+            id number title url state stateReason locked createdAt updatedAt lastEditedAt bodyHTML authorAssociation comments { totalCount }
             author { __typename login avatarUrl url }
             labels(first: 30) { nodes { id name color } }
             assignees(first: 10) { nodes { login avatarUrl } }
             milestone { title }
             viewerCanUpdate viewerCanClose viewerCanReopen viewerSubscription viewerCanReact
             \(reactions)
-            timelineItems(last: 100, itemTypes: \(issueTimelineTypes)) { filteredCount nodes { \(timelineFragment) } }
+            timelineItems(last: 100, itemTypes: \(issueTimelineTypes)) { updatedAt filteredCount nodes { \(timelineFragment) } }
           }
           ... on PullRequest {
-            id number title url state isDraft locked createdAt bodyHTML authorAssociation comments { totalCount }
+            id number title url state isDraft locked createdAt updatedAt lastEditedAt bodyHTML authorAssociation comments { totalCount }
             author { __typename login avatarUrl url }
             labels(first: 30) { nodes { id name color } }
             assignees(first: 10) { nodes { login avatarUrl } }
@@ -87,7 +107,7 @@ nonisolated enum Queries {
             headRefName baseRefName additions deletions changedFiles mergeable mergedAt reviewDecision
             reviewRequests(first: 10) { nodes { requestedReviewer { ... on User { login } ... on Team { name } ... on Bot { login } } } }
             commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
-            timelineItems(last: 100, itemTypes: \(prTimelineTypes)) { filteredCount nodes { \(prTimelineFragment) } }
+            timelineItems(last: 100, itemTypes: \(prTimelineTypes)) { updatedAt filteredCount nodes { \(prTimelineFragment) } }
           }
         }
       }
@@ -98,7 +118,7 @@ nonisolated enum Queries {
     query($owner: String!, $name: String!, $number: Int!) {
       repository(owner: $owner, name: $name) {
         discussion(number: $number) {
-          __typename id number title url closed isAnswered locked createdAt bodyHTML authorAssociation
+          __typename id number title url closed isAnswered locked createdAt updatedAt lastEditedAt bodyHTML authorAssociation
           author { __typename login avatarUrl url }
           category { name emojiHTML }
           answer { id }
